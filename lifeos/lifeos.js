@@ -2,7 +2,7 @@
    Life OS — Dashboard pessoal diário
    ===================================================================== */
 (function () {
-  const { el, $, clear, num, eur0, toast, sheet, field, bar, uid, todayISO, isoDate } = UI;
+  const { el, $, clear, num, eur0, toast, undo, sheet, field, bar, uid, todayISO, isoDate } = UI;
   const D = Domain;
   const NS = "los";
   const BLOCKS = [{ id: "manha", label: "Manhã", icon: "🌅" }, { id: "tarde", label: "Tarde", icon: "☀️" }, { id: "noite", label: "Noite", icon: "🌙" }];
@@ -11,6 +11,12 @@
     App.boot({ active: "lifeos" });
     Store.ensure(NS, { days: {}, brainDump: "", pillars: [], habits: [], habitLog: {}, reviews: {} });
     seedIfEmpty();
+    App.onboard("lifeos", "Life OS", [
+      "🎯 <b>Top 3</b>: define até 3 prioridades absolutas por dia.",
+      "🗓️ <b>Plano do dia</b> por blocos — manhã, tarde e noite.",
+      "🔥 <b>Hábitos</b> com sequências e <b>Pilares</b> com objetivos.",
+      "💪🍎💶 Os widgets ligam-se às tuas apps de Ginásio, Nutrição e Finanças.",
+    ]);
     $("#settingsBtn").addEventListener("click", App.openSettings);
     const tabs = $("#tabs");
     tabs.addEventListener("click", (e) => {
@@ -45,15 +51,18 @@
     ({ hoje: renderHoje, habits: renderHabits, pillars: renderPillars, review: renderReview }[tab] || renderHoje)(view);
   }
 
-  function today() { const s = Store.get(NS); s.days[todayISO()] = s.days[todayISO()] || { tasks: [] }; return s.days[todayISO()]; }
+  let viewDate = todayISO();
+  function curDay() { const s = Store.get(NS); s.days[viewDate] = s.days[viewDate] || { tasks: [] }; return s.days[viewDate]; }
 
   /* ----------------------------- HOJE ----------------------------- */
   function renderHoje(view) {
-    $("#subtitle").textContent = new Date().toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+    const dObj = new Date(viewDate + "T00:00:00");
+    $("#subtitle").textContent = dObj.toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
     const los = Store.get(NS);
-    const day = today();
+    const day = curDay();
 
     view.appendChild(integrationWidgets());
+    view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("hoje"); }));
 
     // Top 3
     const tops = day.tasks.filter((t) => t.top);
@@ -113,24 +122,23 @@
     ]);
   }
 
-  function toggleTask(id) { Store.update(NS, (s) => { const t = s.days[todayISO()].tasks.find((x) => x.id === id); if (t) t.done = !t.done; }); }
+  function toggleTask(id) { Store.update(NS, (s) => { const t = s.days[viewDate].tasks.find((x) => x.id === id); if (t) t.done = !t.done; }); }
   function toggleTop(id) {
-    const day = today();
-    const tops = day.tasks.filter((t) => t.top).length;
+    const tops = curDay().tasks.filter((t) => t.top).length;
     Store.update(NS, (s) => {
-      const t = s.days[todayISO()].tasks.find((x) => x.id === id);
+      const t = s.days[viewDate].tasks.find((x) => x.id === id);
       if (t) { if (!t.top && tops >= 3) { toast("Máximo 3 prioridades — é essa a ideia 🙂"); return; } t.top = !t.top; }
     });
   }
   function addTask(top, block) {
-    if (top && today().tasks.filter((t) => t.top).length >= 3) return toast("Já tens 3 prioridades.");
+    if (top && curDay().tasks.filter((t) => t.top).length >= 3) return toast("Já tens 3 prioridades.");
     const fText = field("Tarefa", { placeholder: "O que precisas de fazer?" });
     const fBlock = field("Bloco", { type: "select", value: block || "", options: [{ value: "", label: "Sem horário" }, ...BLOCKS.map((b) => ({ value: b.id, label: b.label }))] });
     const sh = sheet("Nova tarefa", [fText, fBlock, el("label", { class: "row", style: "gap:8px" }, [el("input", { type: "checkbox", checked: !!top, id: "istop" }), el("span", { text: "Marcar como prioridade (Top 3)" })]),
       el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
         const text = fText.input.value.trim(); if (!text) return toast("Escreve a tarefa.");
-        const isTop = $("#istop").checked && today().tasks.filter((t) => t.top).length < 3;
-        Store.update(NS, (s) => { s.days[todayISO()].tasks.push({ id: uid(), text, done: false, block: fBlock.input.value || null, top: isTop }); });
+        const isTop = $("#istop").checked && curDay().tasks.filter((t) => t.top).length < 3;
+        Store.update(NS, (s) => { s.days[viewDate].tasks.push({ id: uid(), text, done: false, block: fBlock.input.value || null, top: isTop }); });
         sh.close();
       }})]);
     setTimeout(() => fText.input.focus(), 50);
@@ -139,8 +147,8 @@
     const fText = field("Tarefa", { value: t.text });
     const fBlock = field("Bloco", { type: "select", value: t.block || "", options: [{ value: "", label: "Sem horário" }, ...BLOCKS.map((b) => ({ value: b.id, label: b.label }))] });
     const sh = sheet("Editar tarefa", [fText, fBlock, el("div", { class: "row", style: "gap:10px" }, [
-      el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { const d = s.days[todayISO()]; d.tasks = d.tasks.filter((x) => x.id !== t.id); }); sh.close(); } }),
-      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { Store.update(NS, (s) => { const x = s.days[todayISO()].tasks.find((y) => y.id === t.id); if (x) { x.text = fText.input.value.trim() || x.text; x.block = fBlock.input.value || null; } }); sh.close(); } }),
+      el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(t)); Store.update(NS, (s) => { const d = s.days[viewDate]; d.tasks = d.tasks.filter((x) => x.id !== t.id); }); sh.close(); undo("Tarefa apagada", () => Store.update(NS, (s) => { s.days[viewDate].tasks.push(snap); })); } }),
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { Store.update(NS, (s) => { const x = s.days[viewDate].tasks.find((y) => y.id === t.id); if (x) { x.text = fText.input.value.trim() || x.text; x.block = fBlock.input.value || null; } }); sh.close(); } }),
     ])]);
   }
 
@@ -149,10 +157,15 @@
     const los = Store.get(NS), nut = Store.get("nut"), fin = Store.get("fin");
     const wrap = el("div", { class: "grid-2", style: "grid-template-columns:1fr 1fr 1fr;gap:10px" });
 
-    // Treino / saúde
-    const gymStreak = D.gymStreak(los);
+    // Treino / saúde — lê a app de ginásio (gymos) se estiver na mesma origem
+    const gymUrl = Store.get("sys").gymUrl || "https://rblucas2.github.io/gymos/";
+    const gymOn = D.gymConnected();
+    const streak = D.gymStreak(los);
     const trained = D.workoutDone(nut, los);
-    wrap.appendChild(widget("../lifeos/#habits", "💪", gymStreak + (gymStreak === 1 ? " dia" : " dias"), trained ? "Treino feito ✓" : "Streak ginásio", "var(--accent)", () => switchTab("habits")));
+    const last = D.gymLastSession();
+    const gymBig = trained ? "✓ Hoje" : (streak > 0 ? streak + (streak === 1 ? " dia" : " dias") : "—");
+    const gymLabel = trained ? (last ? last.name : "treino feito") : (gymOn ? "🔥 streak ginásio" : "abrir ginásio");
+    wrap.appendChild(widget(gymUrl, "💪", gymBig, gymLabel, "var(--accent)", () => { location.href = gymUrl; }));
 
     // Nutrição
     const ns = D.nutritionSummary(nut, los);
@@ -212,7 +225,7 @@
   function editHabit(h) {
     const isNew = !h; const f = field("Nome do hábito", { value: h ? h.name : "", placeholder: "ex: Meditar, Dormir 8h…" });
     const sh = sheet(isNew ? "Novo hábito" : "Editar hábito", [f, el("div", { class: "row", style: "gap:10px" }, [
-      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.habits = s.habits.filter((x) => x.id !== h.id); if (s.habitLog) delete s.habitLog[h.id]; }); sh.close(); } }) : null,
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(h)); const logSnap = JSON.parse(JSON.stringify((Store.get(NS).habitLog || {})[h.id] || {})); Store.update(NS, (s) => { s.habits = s.habits.filter((x) => x.id !== h.id); if (s.habitLog) delete s.habitLog[h.id]; }); sh.close(); undo("Hábito apagado", () => Store.update(NS, (s) => { s.habits.push(snap); s.habitLog = s.habitLog || {}; s.habitLog[h.id] = logSnap; })); } }) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { const name = f.input.value.trim(); if (!name) return toast("Escreve o nome."); Store.update(NS, (s) => { if (isNew) s.habits.push({ id: uid(), name }); else { const x = s.habits.find((y) => y.id === h.id); if (x) x.name = name; } }); sh.close(); } }),
     ])]);
   }
@@ -257,7 +270,7 @@
   function editPillar(p) {
     const isNew = !p; const f = field("Nome do pilar", { value: p ? p.name : "", placeholder: "ex: Saúde, Conhecimento…" });
     const sh = sheet(isNew ? "Novo pilar" : "Editar pilar", [f, el("div", { class: "row", style: "gap:10px" }, [
-      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.pillars = s.pillars.filter((x) => x.id !== p.id); }); sh.close(); } }) : null,
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(p)); Store.update(NS, (s) => { s.pillars = s.pillars.filter((x) => x.id !== p.id); }); sh.close(); undo("Pilar apagado", () => Store.update(NS, (s) => { s.pillars.push(snap); })); } }) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { const name = f.input.value.trim(); if (!name) return; Store.update(NS, (s) => { if (isNew) s.pillars.push({ id: uid(), name, goals: [] }); else s.pillars.find((x) => x.id === p.id).name = name; }); sh.close(); } }),
     ])]);
   }

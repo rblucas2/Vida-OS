@@ -1,5 +1,5 @@
 /* Service worker — app shell offline para a suite Vida OS */
-const VERSION = "vidaos-v1";
+const VERSION = "vidaos-v2";
 const CORE = [
   "./", "./index.html",
   "./shared/base.css", "./shared/store.js", "./shared/sync.js",

@@ -49,19 +49,43 @@
     }, 1200);
   }
 
+  // Quais os campos que são listas-por-id e objetos-por-chave (para merge sem perdas)
+  const ID_ARRAYS = { fin: ["transactions", "assets", "recurring"], nut: ["foods", "meals"], los: ["habits", "pillars"] };
+  const KEYED_OBJ = { fin: ["budgets", "categoryRules", "nwHistory"], nut: ["diary", "workoutDays", "weightLog"], los: ["days", "habitLog", "reviews"] };
+
+  /** Merge sem perdas: base = estado mais recente; acrescenta itens/chaves que só existem no outro. */
+  function mergeStates(ns, local, remote) {
+    const remoteNewer = (remote._updatedAt || 0) >= (local._updatedAt || 0);
+    const newer = remoteNewer ? remote : local, older = remoteNewer ? local : remote;
+    const out = JSON.parse(JSON.stringify(newer));
+    (ID_ARRAYS[ns] || []).forEach((key) => {
+      const arr = Array.isArray(out[key]) ? out[key] : []; const ids = new Set(arr.map((x) => x && x.id));
+      (older[key] || []).forEach((x) => { if (x && !ids.has(x.id)) arr.push(x); });
+      out[key] = arr;
+    });
+    (KEYED_OBJ[ns] || []).forEach((key) => {
+      const obj = out[key] && typeof out[key] === "object" ? out[key] : {}; const old = older[key] || {};
+      for (const k in old) if (!(k in obj)) obj[k] = old[k];
+      out[key] = obj;
+    });
+    out._updatedAt = Math.max(local._updatedAt || 0, remote._updatedAt || 0);
+    return out;
+  }
+  const stripVol = (o) => { const c = { ...o }; delete c._updatedAt; return JSON.stringify(c); };
+
   async function pullOne(ns) {
     const url = `${cfg.url}/rest/v1/app_state?app=eq.${ns}&sync_code=eq.${encodeURIComponent(cfg.code)}&select=data,updated_at`;
     const r = await fetch(url, { headers: headers() });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const rows = await r.json();
-    if (!rows.length) return false;
-    const remote = rows[0].data || {};
     const local = Store.get(ns);
-    const rT = remote._updatedAt || Date.parse(rows[0].updated_at) || 0;
-    const lT = local._updatedAt || 0;
-    if (rT > lT) { Store.replace(ns, remote, { fromSync: true }); return true; }
-    if (lT > rT) { push(ns, local); }          // empurra o nosso, mais recente
-    return false;
+    if (!rows.length) { if (Object.keys(local).length) push(ns, local); return false; }
+    const remote = rows[0].data || {};
+    const merged = mergeStates(ns, local, remote);
+    const changedLocal = JSON.stringify(merged) !== JSON.stringify(local);
+    if (changedLocal) Store.replace(ns, merged, { fromSync: true });   // atualiza local + re-render
+    if (stripVol(merged) !== stripVol(remote)) push(ns, merged);       // devolve à cloud as adições do outro lado
+    return changedLocal;
   }
 
   async function pullAll() {

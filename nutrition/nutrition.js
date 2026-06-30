@@ -2,7 +2,7 @@
    Nutrição & Macros
    ===================================================================== */
 (function () {
-  const { el, $, clear, num, toast, sheet, field, bar, ring, uid, todayISO } = UI;
+  const { el, $, clear, num, toast, undo, sheet, field, bar, ring, uid, todayISO } = UI;
   const D = Domain;
   const NS = "nut";
 
@@ -24,7 +24,13 @@
 
   function init() {
     App.boot({ active: "nutrition" });
-    Store.ensure(NS, { profile: null, foods: SEED_FOODS, diary: {}, meals: [], workoutDays: {} });
+    Store.ensure(NS, { profile: null, foods: SEED_FOODS, diary: {}, meals: [], workoutDays: {}, weightLog: {} });
+    App.onboard("nutrition", "Nutrição", [
+      "🧮 Define o teu perfil na <b>Calculadora</b> (Mifflin-St Jeor).",
+      "📷 Regista comida com o <b>scanner de código de barras</b> (Open Food Facts).",
+      "⚡ O <b>Fecho de macros</b> sugere o que comer para fechares o dia.",
+      "💪 Em dias de treino (lidos da app de Ginásio), os alvos sobem automaticamente.",
+    ]);
     $("#settingsBtn").addEventListener("click", App.openSettings);
     const tabs = $("#tabs");
     tabs.addEventListener("click", (e) => {
@@ -45,10 +51,11 @@
   }
 
   /* ----------------------------- HOJE ----------------------------- */
+  let viewDate = todayISO();
   function renderHoje(view) {
     const nut = Store.get(NS), los = Store.get("los");
-    const targets = D.effectiveTargets(nut, los);
-    $("#subtitle").textContent = new Date().toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+    const targets = D.effectiveTargets(nut, los, viewDate);
+    $("#subtitle").textContent = new Date(viewDate + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
 
     if (!targets) {
       view.appendChild(el("div", { class: "card empty" }, [
@@ -58,7 +65,7 @@
       return;
     }
 
-    const got = D.dayIntake(nut);
+    const got = D.dayIntake(nut, viewDate);
 
     // Anel de calorias
     const kcalPct = targets.kcal ? (got.kcal / targets.kcal) * 100 : 0;
@@ -68,10 +75,11 @@
       el("div", { class: "muted tiny", style: "margin-top:6px", text: `${num(got.kcal)} de ${num(targets.kcal)} kcal${targets.boosted ? " · +12% treino 💪" : ""}` }),
     ]);
 
-    // Toggle treino
-    const trained = D.workoutDone(nut, los);
-    const trainBtn = el("button", { class: "btn btn-block " + (trained ? "btn-soft" : ""), html: (trained ? "✓ " : "") + "Treino concluído hoje", onclick: () => {
-      Store.update(NS, (s) => { s.workoutDays = s.workoutDays || {}; if (s.workoutDays[todayISO()]) delete s.workoutDays[todayISO()]; else s.workoutDays[todayISO()] = true; });
+    // Toggle treino (desativado se a app de ginásio já registou treino nesse dia)
+    const trained = D.workoutDone(nut, los, viewDate);
+    const fromGym = D.gymWorkoutDone(viewDate);
+    const trainBtn = el("button", { class: "btn btn-block " + (trained ? "btn-soft" : ""), disabled: fromGym, title: fromGym ? "Treino registado na app de Ginásio" : "", html: (trained ? "✓ " : "") + (fromGym ? "Treino (Ginásio) 💪" : "Treino concluído"), onclick: () => {
+      Store.update(NS, (s) => { s.workoutDays = s.workoutDays || {}; if (s.workoutDays[viewDate]) delete s.workoutDays[viewDate]; else s.workoutDays[viewDate] = true; });
     }});
 
     const macros = el("div", { class: "grid-2" }, [
@@ -85,26 +93,27 @@
     ]);
 
     // Diário
-    const items = (nut.diary[todayISO()] || []);
+    const items = (nut.diary[viewDate] || []);
     const diaryCard = el("div", { class: "card" }, [
       el("div", { class: "row", style: "justify-content:space-between;margin-bottom:6px" }, [
-        el("strong", { text: "Diário de hoje" }),
+        el("strong", { text: "Diário" }),
         el("span", { class: "tiny muted", text: items.length + " itens" }),
       ]),
     ]);
     if (!items.length) diaryCard.appendChild(el("div", { class: "empty", text: "Ainda não registaste nada. Toca em + para adicionar." }));
     else {
       const list = el("div", { class: "list" });
-      items.forEach((it, i) => {
+      items.forEach((it) => {
         list.appendChild(el("div", { class: "item" }, [
           el("div", { class: "grow" }, [el("div", { class: "t", text: it.nome }), el("div", { class: "s", text: `${num(it.grams)} g · ${num(it.p)}P ${num(it.c)}C ${num(it.f)}G` })]),
           el("div", { class: "amt", text: num(it.kcal) + " kcal" }),
-          el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => removeDiary(i) }),
+          el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => removeDiary(it.id) }),
         ]));
       });
       diaryCard.appendChild(list);
     }
 
+    view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("hoje"); }));
     view.appendChild(el("div", { class: "stack" }, [ringCard, macros, diaryCard]));
     if (nut.meals.length) {
       const qc = el("div", { class: "row wrap", style: "gap:8px;margin-top:12px" });
@@ -127,12 +136,16 @@
     return c;
   }
 
-  function removeDiary(i) { Store.update(NS, (s) => { (s.diary[todayISO()] || []).splice(i, 1); }); }
+  function removeDiary(id) {
+    let snap = null, idx = -1;
+    Store.update(NS, (s) => { const arr = s.diary[viewDate] || []; idx = arr.findIndex((x) => x.id === id); if (idx >= 0) { snap = arr[idx]; arr.splice(idx, 1); } });
+    if (snap) undo("Removido do diário", () => Store.update(NS, (s) => { s.diary[viewDate] = s.diary[viewDate] || []; s.diary[viewDate].splice(Math.min(idx, s.diary[viewDate].length), 0, snap); }));
+  }
 
   function logMeal(m) {
     Store.update(NS, (s) => {
-      s.diary[todayISO()] = s.diary[todayISO()] || [];
-      m.items.forEach((it) => s.diary[todayISO()].push({ ...it, id: uid() }));
+      s.diary[viewDate] = s.diary[viewDate] || [];
+      m.items.forEach((it) => s.diary[viewDate].push({ ...it, id: uid() }));
     });
     toast("Refeição adicionada ✓");
   }
@@ -178,8 +191,8 @@
         const g = parseFloat(gramsF.input.value) || 0; if (g <= 0) return toast("Quantidade inválida.");
         const k = g / 100;
         Store.update(NS, (st) => {
-          st.diary[todayISO()] = st.diary[todayISO()] || [];
-          st.diary[todayISO()].push({ id: uid(), foodId: selected.id, nome: selected.nome, grams: g,
+          st.diary[viewDate] = st.diary[viewDate] || [];
+          st.diary[viewDate].push({ id: uid(), foodId: selected.id, nome: selected.nome, grams: g,
             kcal: Math.round(selected.calorias * k), p: +(selected.proteina * k).toFixed(1), c: +(selected.hidratos * k).toFixed(1), f: +(selected.gordura * k).toFixed(1) });
         });
         s.close(); toast("Adicionado ✓");
@@ -190,8 +203,8 @@
   /* --------------------- Macro Solver (Fecho de macros) --------------------- */
   function macroSolver() {
     const nut = Store.get(NS), los = Store.get("los");
-    const t = D.effectiveTargets(nut, los); if (!t) return;
-    const got = D.dayIntake(nut);
+    const t = D.effectiveTargets(nut, los, viewDate); if (!t) return;
+    const got = D.dayIntake(nut, viewDate);
     const need = { p: t.protein - got.p, c: t.carbs - got.c, f: t.fat - got.f, kcal: t.kcal - got.kcal };
 
     // Pontua cada alimento: o que mais aproxima dos macros em falta sem estourar.
@@ -236,8 +249,8 @@
   function addFromSolver(c) {
     const k = c.grams / 100;
     Store.update(NS, (st) => {
-      st.diary[todayISO()] = st.diary[todayISO()] || [];
-      st.diary[todayISO()].push({ id: uid(), foodId: c.food.id, nome: c.food.nome, grams: c.grams,
+      st.diary[viewDate] = st.diary[viewDate] || [];
+      st.diary[viewDate].push({ id: uid(), foodId: c.food.id, nome: c.food.nome, grams: c.grams,
         kcal: Math.round(c.food.calorias * k), p: +(c.food.proteina * k).toFixed(1), c: +(c.food.hidratos * k).toFixed(1), f: +(c.food.gordura * k).toFixed(1) });
     });
     toast("Adicionado ✓");
@@ -275,6 +288,7 @@
     recompute(false);
 
     view.appendChild(el("div", { class: "stack" }, [
+      weightCard(),
       el("div", { class: "card" }, [
         el("div", { class: "input-row" }, [fAge, fSex]),
         el("div", { class: "input-row", style: "margin-top:12px" }, [fW, fH]),
@@ -286,6 +300,49 @@
     ]));
   }
   function kpi(k, v) { return el("div", { class: "kpi center" }, [el("div", { class: "v", text: v }), el("div", { class: "k", text: k })]); }
+
+  /* ----------------------------- PESO ----------------------------- */
+  function weightCard() {
+    const nut = Store.get(NS);
+    const log = nut.weightLog || {};
+    const entries = Object.entries(log).sort((a, b) => a[0].localeCompare(b[0]));
+    const last = entries.length ? entries[entries.length - 1][1] : (nut.profile && nut.profile.weight);
+    const first = entries.length ? entries[0][1] : last;
+    const delta = (last != null && first != null) ? last - first : 0;
+    const goal = nut.profile && nut.profile.goal;
+    const goodDir = goal === "lose" ? delta <= 0 : goal === "gain" ? delta >= 0 : Math.abs(delta) < 1;
+    const card = el("div", { class: "card" }, [
+      el("div", { class: "row", style: "justify-content:space-between" }, [
+        el("strong", { text: "Peso" }),
+        el("button", { class: "btn btn-soft btn-sm", text: "+ Registar", onclick: logWeight }),
+      ]),
+      el("div", { class: "row", style: "gap:14px;align-items:baseline;margin-top:6px" }, [
+        el("div", { class: "big num", text: last != null ? num(last, 1) + " kg" : "—" }),
+        entries.length > 1 ? el("div", { class: "tiny", style: "color:" + (goodDir ? "var(--good)" : "var(--warn)"), text: (delta > 0 ? "+" : "") + num(delta, 1) + " kg desde o início" }) : null,
+      ]),
+    ]);
+    if (entries.length >= 2) {
+      const slice = entries.slice(-30);
+      card.appendChild(UI.lineChart(slice.map((e) => e[1]), { labels: [UI.prettyDate(slice[0][0]), UI.prettyDate(slice[slice.length - 1][0])], height: 70, color: "var(--accent)" }));
+    } else card.appendChild(el("div", { class: "tiny muted", style: "margin-top:6px", text: "Regista o teu peso regularmente para veres a evolução." }));
+    return card;
+  }
+  function logWeight() {
+    const nut = Store.get(NS);
+    const f = field("Peso (kg)", { type: "number", value: (nut.profile && nut.profile.weight) || "", inputmode: "decimal", step: "0.1" });
+    const fd = field("Data", { type: "date", value: todayISO() });
+    const sh = sheet("Registar peso", [f, fd, el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+      const kg = parseFloat(f.input.value); if (!kg) return toast("Indica o peso.");
+      Store.update(NS, (s) => {
+        s.weightLog = s.weightLog || {}; s.weightLog[fd.input.value] = kg;
+        if (!s.profile) s.profile = { sex: "m", activity: "moderado", goal: "maintain" };
+        const dates = Object.keys(s.weightLog).sort();
+        if (dates[dates.length - 1] === fd.input.value) s.profile.weight = kg;   // peso mais recente → perfil
+        if (s.profile.weight && s.profile.height && s.profile.age) s.targets = Domain.nutritionTargets(s.profile);
+      });
+      sh.close(); toast("Peso registado ✓");
+    }})]);
+  }
 
   /* ----------------------------- ALIMENTOS ----------------------------- */
   function renderFoods(view) {
@@ -325,8 +382,10 @@
     const fh = field("Hidratos /100g", { type: "number", value: f.hidratos, inputmode: "decimal" });
     const fg = field("Gordura /100g", { type: "number", value: f.gordura, inputmode: "decimal" });
     const buttons = el("div", { class: "row", style: "gap:10px" }, [
-      exists ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: async () => {
-        if (await UI.confirm("Apagar este alimento da base?", { danger: true })) { Store.update(NS, (s) => { s.foods = s.foods.filter((x) => x.id !== food.id); }); s.close(); }
+      exists ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => {
+        const snap = JSON.parse(JSON.stringify(food));
+        Store.update(NS, (st) => { st.foods = st.foods.filter((x) => x.id !== food.id); }); s.close();
+        undo("Alimento apagado", () => Store.update(NS, (st) => { st.foods.unshift(snap); }));
       }}) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
         const data = { id: f.id || uid(), nome: fn.input.value.trim() || "Sem nome", categoria: fc.input.value.trim() || "Outros",

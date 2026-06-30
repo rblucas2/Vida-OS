@@ -93,6 +93,8 @@
       Sync.reload(); toast("Sincronização ligada ✓");
     }});
 
+    const syncNow = el("button", { class: "btn btn-block", text: "↻ Sincronizar agora", onclick: async () => { if (!Sync.enabled) return toast("Liga a sincronização primeiro."); toast("A sincronizar…"); await Sync.pullAll(); toast("Sincronizado ✓"); } });
+
     const help = el("details", { class: "card", style: "margin-top:4px" }, [
       el("summary", { style: "cursor:pointer;font-weight:600", text: "Como ativar a sincronização grátis (1x, ~3 min)" }),
       el("ol", { class: "muted tiny", style: "line-height:1.7;padding-left:18px" }, [
@@ -103,6 +105,13 @@
       ]),
       el("pre", { class: "tiny", style: "white-space:pre-wrap;background:var(--surface-2);padding:12px;border-radius:10px;overflow:auto", text: Sync.sqlSchema }),
     ]);
+
+    // Integração com a app de Ginásio
+    const curGym = Store.get("sys").gymUrl || "https://rblucas2.github.io/gymos/";
+    const fGym = el("input", { type: "url", value: curGym, placeholder: "https://.../gymos/" });
+    fGym.addEventListener("change", () => { Store.update("sys", (s) => { s.gymUrl = fGym.value.trim(); }); toast("Guardado ✓"); });
+    const gymField = el("label", { class: "field" }, [el("span", { text: "URL da app de Ginásio (gymos)" }), fGym,
+      el("div", { class: "tiny muted", style: "margin-top:6px", html: Domain.gymConnected() ? "✓ Ligada — treinos detetados neste dispositivo." : "Para ler os treinos, publica esta suite na mesma conta GitHub (mesma origem que o gymos)." })]);
 
     const exportBtn = el("button", { class: "btn btn-block", text: "Exportar cópia de segurança (.json)", onclick: () => {
       const blob = new Blob([JSON.stringify(Store.exportAll(), null, 2)], { type: "application/json" });
@@ -119,14 +128,26 @@
     UI.sheet("Definições", [
       el("div", { class: "section-title", style: "margin-top:4px", text: "Aparência" }), themeSel,
       el("button", { class: "btn btn-soft btn-block", text: "Instalar app no dispositivo", onclick: promptInstall }),
+      el("div", { class: "section-title", text: "Integração" }), gymField,
       el("div", { class: "section-title", text: "Sincronização telemóvel ↔ PC" }),
       el("div", { class: "row" }, [el("span", { class: "muted tiny", text: "Estado:" }), syncState]),
-      fUrl, fKey, fCode, saveSync, help,
+      fUrl, fKey, fCode, saveSync, syncNow, help,
       el("div", { class: "section-title", text: "Cópia de segurança" }),
       exportBtn, importBtn, importInput,
       el("p", { class: "tiny muted center", style: "margin-top:18px", text: "Vida OS · dados guardados no teu dispositivo" }),
     ]);
     refreshState();
+  }
+
+  // ---- Onboarding (1ª utilização de cada app) -------------------------
+  function onboard(appId, title, lines) {
+    const sys = Store.get("sys");
+    if (sys.onboarded && sys.onboarded[appId]) return;
+    const ul = el("ul", { class: "muted", style: "line-height:1.7;padding-left:20px;font-size:.92rem" }, lines.map((l) => el("li", { html: l })));
+    const s = UI.sheet(title, [
+      el("p", { class: "muted tiny", text: "Bem-vindo 👋 — tudo fica guardado no teu dispositivo." }), ul,
+      el("button", { class: "btn btn-primary btn-block", text: "Começar", onclick: () => { Store.update("sys", (st) => { st.onboarded = st.onboarded || {}; st.onboarded[appId] = true; }, { silent: true }); s.close(); } }),
+    ]);
   }
 
   // ---- API pública ----------------------------------------------------
@@ -140,7 +161,7 @@
       // sincroniza UI quando o sync trouxer dados novos
       Store.subscribe("*", () => { /* cada app trata do seu render via subscribe próprio */ });
     },
-    applyTheme, promptInstall, openSettings, tabbar,
+    applyTheme, promptInstall, openSettings, tabbar, onboard,
   };
   global.App = App;
 })(window);

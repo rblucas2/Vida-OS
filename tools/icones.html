@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gerador de ícones · Vida OS</title>
+  <link rel="stylesheet" href="../shared/base.css" />
+  <style> .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px} .ic{text-align:center} canvas{width:96px;height:96px;border-radius:20px;background:var(--surface-2)} </style>
+</head>
+<body>
+  <main class="app">
+    <div style="padding-top:28px">
+      <h1 style="margin:0">Gerador de ícones</h1>
+      <p class="muted">Para ícones perfeitos no <b>iPhone</b> (o Android já usa os SVG). Gera os PNG, guarda-os na pasta <code>icons/</code> e usa-os nos <code>apple-touch-icon</code>. No Android podes ignorar isto.</p>
+    </div>
+    <div class="grid" id="grid"></div>
+    <button class="btn btn-primary btn-block" style="margin-top:20px" id="all">Descarregar todos (192 · 512 · 180)</button>
+    <p class="tiny muted center" style="margin-top:16px">Depois, em cada <code>index.html</code>, aponta <code>&lt;link rel="apple-touch-icon" href="../icons/&lt;app&gt;-180.png"&gt;</code>.</p>
+  </main>
+
+  <script>
+  const APPS = [
+    { id:"lifeos",  color:"#3b6ef5", glyph:"house" },
+    { id:"finance", color:"#2e9e5b", glyph:"card" },
+    { id:"nutrition", color:"#d9743b", glyph:"fork" },
+    { id:"launcher", color:"#1b1b1a", glyph:"dots" },
+  ];
+
+  function rrect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+
+  function draw(canvas, app, size){
+    canvas.width=size; canvas.height=size;
+    const c=canvas.getContext("2d"); const s=size;
+    rrect(c,0,0,s,s,s*0.22); c.fillStyle=app.color; c.fill();
+    c.strokeStyle="#fff"; c.lineWidth=s*0.05; c.lineCap="round"; c.lineJoin="round"; c.fillStyle="#fff";
+    const P=(a)=>a*s;
+    if(app.glyph==="house"){
+      c.beginPath(); c.moveTo(P(.27),P(.5)); c.lineTo(P(.5),P(.3)); c.lineTo(P(.73),P(.5)); c.stroke();
+      c.beginPath(); c.moveTo(P(.33),P(.47)); c.lineTo(P(.33),P(.72)); c.lineTo(P(.67),P(.72)); c.lineTo(P(.67),P(.47)); c.stroke();
+    } else if(app.glyph==="card"){
+      rrect(c,P(.24),P(.34),P(.52),P(.32),P(.06)); c.stroke();
+      c.beginPath(); c.arc(P(.5),P(.5),P(.085),0,7); c.stroke();
+    } else if(app.glyph==="fork"){
+      c.beginPath(); c.moveTo(P(.4),P(.26)); c.lineTo(P(.4),P(.4)); c.moveTo(P(.46),P(.26)); c.lineTo(P(.46),P(.42));
+      c.moveTo(P(.52),P(.26)); c.lineTo(P(.52),P(.4)); c.stroke();
+      c.beginPath(); c.moveTo(P(.46),P(.42)); c.lineTo(P(.46),P(.76)); c.stroke();
+      c.beginPath(); c.moveTo(P(.64),P(.26)); c.quadraticCurveTo(P(.58),P(.42),P(.64),P(.54)); c.lineTo(P(.64),P(.76)); c.stroke();
+    } else if(app.glyph==="dots"){
+      const d=[[.36,.4,"#3b6ef5"],[.64,.4,"#2e9e5b"],[.5,.64,"#d9743b"]];
+      d.forEach(([x,y,col])=>{ c.fillStyle=col; c.beginPath(); c.arc(P(x),P(y),P(.1),0,7); c.fill(); });
+      c.strokeStyle="#f6f6f4"; c.beginPath(); c.arc(P(.5),P(.5),P(.045),0,7); c.fillStyle="#f6f6f4"; c.fill();
+    }
+  }
+
+  function download(app, size){
+    const cv=document.createElement("canvas"); draw(cv,app,size);
+    const a=document.createElement("a"); a.href=cv.toDataURL("image/png"); a.download=`${app.id}-${size}.png`; a.click();
+  }
+
+  const grid=document.getElementById("grid");
+  APPS.forEach((app)=>{
+    const cv=document.createElement("canvas"); draw(cv,app,180);
+    const box=document.createElement("div"); box.className="card ic";
+    box.appendChild(cv);
+    const t=document.createElement("div"); t.className="tiny"; t.style.margin="8px 0"; t.textContent=app.id; box.appendChild(t);
+    [192,512,180].forEach((sz)=>{ const b=document.createElement("button"); b.className="btn btn-sm"; b.textContent=sz; b.onclick=()=>download(app,sz); box.appendChild(b); });
+    grid.appendChild(box);
+  });
+  document.getElementById("all").onclick=()=>{ APPS.forEach((app)=>[192,512,180].forEach((sz)=>setTimeout(()=>download(app,sz),50))); };
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
    Finanças Pessoais
    ===================================================================== */
 (function () {
-  const { el, $, clear, eur, eur0, num, toast, sheet, field, bar, donut, colorFor, uid, todayISO, monthKey, prettyMonth } = UI;
+  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, colorFor, uid, todayISO, monthKey, prettyMonth } = UI;
   const D = Domain;
   const NS = "fin";
 
@@ -10,7 +10,14 @@
 
   function init() {
     App.boot({ active: "finance" });
-    Store.ensure(NS, { transactions: [], budgets: {}, assets: [], categoryRules: {}, nwHistory: {} });
+    Store.ensure(NS, { transactions: [], budgets: {}, assets: [], categoryRules: {}, nwHistory: {}, recurring: [] });
+    applyRecurring();
+    App.onboard("finance", "Finanças", [
+      "⇪ Importa o <b>CSV do banco</b> — categorias automáticas que aprendem com as tuas correções.",
+      "↻ Define <b>movimentos recorrentes</b> (renda, ordenado, subscrições).",
+      "🎯 <b>Orçamentos</b> com alertas e <b>Dinheiro Livre</b> do mês.",
+      "📊 <b>Net Worth</b> com evolução ao longo do tempo.",
+    ]);
     $("#settingsBtn").addEventListener("click", App.openSettings);
     const tabs = $("#tabs");
     tabs.addEventListener("click", (e) => {
@@ -125,6 +132,7 @@
         el("button", { class: "btn btn-soft btn-block", html: "⇪ Importar CSV", onclick: () => importInput.click() }),
         el("button", { class: "btn btn-primary btn-block", text: "+ Manual", onclick: () => editTx(null) }),
       ]),
+      el("button", { class: "btn btn-ghost btn-block btn-sm", html: "↻ Gerir movimentos recorrentes", onclick: manageRecurring }),
       importInput, search, list,
     ]));
   }
@@ -159,12 +167,13 @@
     const body = [
       fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, fCat, dl, fAcc,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
-        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: async () => { if (await UI.confirm("Apagar esta transação?", { danger: true })) { Store.update(NS, (s) => { s.transactions = s.transactions.filter((x) => x.id !== t.id); }); sh.close(); } } }) : null,
+        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(t)); Store.update(NS, (s) => { s.transactions = s.transactions.filter((x) => x.id !== t.id); }); sh.close(); undo("Transação apagada", () => Store.update(NS, (s) => { s.transactions.push(snap); })); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
           const data = { ...t, date: fDate.input.value, desc: fDesc.input.value.trim(), amount: Math.abs(parseFloat(fAmount.input.value) || 0),
             category: fCat.input.value.trim() || "Outros", type: fType.input.value, account: fAcc.input.value.trim() || "Manual", manual: t.manual !== false };
           if (!data.amount) return toast("Indica um valor.");
           Store.update(NS, (s) => { const i = s.transactions.findIndex((x) => x.id === data.id); if (i >= 0) s.transactions[i] = data; else { data._c = Date.now(); s.transactions.push(data); } });
+          learnRule(data.desc, data.category);   // aprende a categoria desta descrição
           sh.close(); toast("Guardado ✓");
         }}),
       ]),
@@ -176,6 +185,77 @@
     const set = new Set(["Supermercado", "Restaurantes", "Transportes", "Contas", "Habitação", "Saúde", "Subscrições", "Compras", "Lazer", "Salário", "Outros"]);
     Store.get(NS).transactions.forEach((t) => t.category && set.add(t.category));
     return [...set];
+  }
+
+  /* ------- Categorização que aprende com as correções do utilizador ------- */
+  function learnRule(desc, category) {
+    if (!desc || !category || category === "Outros") return;
+    const token = (desc.toLowerCase().match(/[a-zà-ú]{4,}/gi) || []).sort((a, b) => b.length - a.length)[0];
+    if (!token) return;
+    if (Domain.DEFAULT_RULES[token] === category) return;     // já coberto por defeito
+    if (Store.get(NS).categoryRules[token] === category) return;
+    Store.update(NS, (s) => { s.categoryRules = s.categoryRules || {}; s.categoryRules[token] = category; }, { silent: true });
+  }
+
+  /* ----------------------------- RECORRENTES ----------------------------- */
+  function monthsFromTo(since, to) {
+    const out = []; let [y, m] = since.split("-").map(Number); const [ty, tm] = to.split("-").map(Number);
+    while (y < ty || (y === ty && m <= tm)) { out.push(`${y}-${String(m).padStart(2, "0")}`); m++; if (m > 12) { m = 1; y++; } if (out.length > 60) break; }
+    return out;
+  }
+  function applyRecurring() {
+    const fin = Store.get(NS); const rec = fin.recurring || []; if (!rec.length) return;
+    const now = monthKey(); const toAdd = [];
+    rec.forEach((r) => {
+      if (r.active === false) return;
+      const since = r.since || now;
+      monthsFromTo(since, now).forEach((mk) => {
+        const exists = fin.transactions.some((t) => t.recurringId === r.id && (t.date || "").slice(0, 7) === mk);
+        if (!exists) {
+          const day = String(Math.min(28, Math.max(1, r.day || 1))).padStart(2, "0");
+          toAdd.push({ id: uid(), date: `${mk}-${day}`, desc: r.desc, amount: r.amount, type: r.type, category: r.category, account: r.account || "Recorrente", manual: true, recurringId: r.id });
+        }
+      });
+    });
+    if (!toAdd.length) return;
+    Store.update(NS, (s) => { toAdd.forEach((t, i) => { t._c = Date.now() + i; s.transactions.push(t); }); });
+    toast(`${toAdd.length} movimento(s) recorrente(s) lançado(s)`);
+  }
+  function manageRecurring() {
+    const fin = Store.get(NS);
+    const list = el("div", { class: "list" });
+    if (!fin.recurring.length) list.appendChild(el("div", { class: "empty tiny", text: "Sem movimentos recorrentes." }));
+    fin.recurring.forEach((r) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editRecurring(r) }, [
+      el("div", { class: "grow" }, [el("div", { class: "t", text: r.desc }), el("div", { class: "s", text: `${r.type === "income" ? "Receita" : "Despesa"} · dia ${r.day} · ${r.category}` })]),
+      el("div", { class: "amt", style: r.type === "income" ? "color:var(--good)" : "", text: (r.type === "income" ? "+" : "−") + eur(r.amount).replace("€", "") + "€" }),
+    ])));
+    sheet("Movimentos recorrentes", [
+      el("p", { class: "tiny muted", text: "Renda, ordenado, subscrições… lançados automaticamente todos os meses." }),
+      list,
+      el("button", { class: "btn btn-primary btn-block", text: "+ Novo recorrente", onclick: () => editRecurring(null) }),
+    ]);
+  }
+  function editRecurring(r) {
+    const isNew = !r;
+    r = r || { id: uid(), desc: "", amount: "", type: "expense", category: "Outros", account: "Recorrente", day: 1, active: true, since: monthKey() };
+    const fType = field("Tipo", { type: "select", value: r.type, options: [{ value: "expense", label: "Despesa" }, { value: "income", label: "Receita" }] });
+    const fAmount = field("Valor (€)", { type: "number", value: r.amount, inputmode: "decimal" });
+    const fDay = field("Dia do mês (1–28)", { type: "number", value: r.day, min: 1, max: 28, inputmode: "numeric" });
+    const fDesc = field("Descrição", { value: r.desc, placeholder: "ex: Renda, Ordenado, Netflix…" });
+    const fCat = field("Categoria", { value: r.category, list: "rcats" });
+    const dl = el("datalist", { id: "rcats" }, uniqueCats().map((c) => el("option", { value: c })));
+    const sh = sheet(isNew ? "Novo recorrente" : "Editar recorrente", [
+      fType, el("div", { class: "input-row" }, [fAmount, fDay]), fDesc, fCat, dl,
+      el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
+        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.recurring = s.recurring.filter((x) => x.id !== r.id); }); sh.close(); manageRecurring(); } }) : null,
+        el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+          const data = { ...r, desc: fDesc.input.value.trim() || "Recorrente", amount: Math.abs(parseFloat(fAmount.input.value) || 0), type: fType.input.value, category: fCat.input.value.trim() || "Outros", day: Math.min(28, Math.max(1, parseInt(fDay.input.value) || 1)) };
+          if (!data.amount) return toast("Indica um valor.");
+          Store.update(NS, (s) => { const i = s.recurring.findIndex((x) => x.id === data.id); if (i >= 0) s.recurring[i] = data; else s.recurring.push(data); });
+          applyRecurring(); sh.close(); toast("Guardado ✓");
+        }}),
+      ]),
+    ]);
   }
 
   /* ----------------------------- IMPORTAÇÃO CSV ----------------------------- */
@@ -385,7 +465,7 @@
     const sh = sheet(isNew ? "Novo registo" : "Editar registo", [
       fName, fVal, fType,
       el("div", { class: "row", style: "gap:10px" }, [
-        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.assets = s.assets.filter((x) => x.id !== a.id); }); sh.close(); } }) : null,
+        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(a)); Store.update(NS, (s) => { s.assets = s.assets.filter((x) => x.id !== a.id); }); sh.close(); undo("Registo apagado", () => Store.update(NS, (s) => { s.assets.push(snap); })); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
           const data = { ...a, name: fName.input.value.trim() || "Sem nome", value: parseFloat(fVal.input.value) || 0, type: fType.input.value };
           Store.update(NS, (s) => { s.assets = s.assets || []; const i = s.assets.findIndex((x) => x.id === data.id); if (i >= 0) s.assets[i] = data; else s.assets.push(data); });

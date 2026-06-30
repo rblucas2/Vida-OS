@@ -54,6 +54,17 @@
     setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); }, ms);
   }
 
+  // Toast com ação "Anular" (undo)
+  function undo(msg, fn, ms = 5000) {
+    let host = $("#toast"); if (!host) { host = el("div", { id: "toast" }); document.body.appendChild(host); }
+    const btn = el("button", { style: "background:none;border:0;color:var(--accent);font-weight:700;margin-left:12px;padding:0;font-size:.85rem;cursor:pointer", text: "Anular" });
+    const t = el("div", { class: "t" }, [document.createTextNode(msg), btn]);
+    host.appendChild(t);
+    let done = false;
+    btn.addEventListener("click", () => { if (done) return; done = true; fn(); t.remove(); toast("Reposto ✓"); });
+    setTimeout(() => { if (!done) { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); } }, ms);
+  }
+
   // --- Sheet / Modal ---------------------------------------------------
   function sheet(title, contentNodes, { onClose } = {}) {
     const body = el("div", { class: "form-grid" }, contentNodes);
@@ -166,6 +177,28 @@
     return wrap;
   }
 
+  // Gráfico de linha (escala min–max) — ideal para peso/património
+  function lineChart(values, { height = 70, color = "var(--accent)", labels } = {}) {
+    const w = 300, h = height, pad = 8;
+    const min = Math.min(...values), max = Math.max(...values), range = (max - min) || 1, n = values.length;
+    const X = (i) => (n <= 1 ? w / 2 : pad + i * (w - 2 * pad) / (n - 1));
+    const Y = (v) => pad + (1 - (v - min) / range) * (h - 2 * pad);
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("width", "100%"); svg.setAttribute("height", h); svg.setAttribute("preserveAspectRatio", "none");
+    const poly = document.createElementNS(ns, "polyline");
+    poly.setAttribute("points", values.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" "));
+    poly.setAttribute("fill", "none"); poly.setAttribute("stroke", color); poly.setAttribute("stroke-width", "2.5");
+    poly.setAttribute("stroke-linecap", "round"); poly.setAttribute("stroke-linejoin", "round"); poly.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(poly);
+    const dot = document.createElementNS(ns, "circle");
+    dot.setAttribute("cx", X(n - 1)); dot.setAttribute("cy", Y(values[n - 1])); dot.setAttribute("r", "3.5"); dot.setAttribute("fill", color); dot.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.appendChild(dot);
+    const wrap = el("div", { style: "margin-top:8px" }, [svg]);
+    if (labels) wrap.appendChild(el("div", { class: "row", style: "justify-content:space-between;margin-top:2px" }, [el("span", { class: "tiny muted", text: labels[0] }), el("span", { class: "tiny muted", text: labels[labels.length - 1] })]));
+    return wrap;
+  }
+
   // Paleta determinística por nome de categoria
   const PALETTE = ["#3b6ef5","#2e9e5b","#d99a2b","#d9534f","#8e5bd9","#16a3a3","#e06ba3","#5b7cd9","#7a9e2e","#c1672e"];
   function colorFor(str) {
@@ -179,6 +212,22 @@
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+  // Navegador de datas: ‹  [Hoje / data]  › — clicar no centro volta a hoje
+  function dateNav(curIso, onChange) {
+    const isToday = curIso === todayISO();
+    const d = new Date(curIso + "T00:00:00");
+    const yest = isoDate(new Date(Date.now() - 86400000));
+    const tom = isoDate(new Date(Date.now() + 86400000));
+    let label = isToday ? "Hoje" : curIso === yest ? "Ontem" : curIso === tom ? "Amanhã"
+      : d.toLocaleDateString("pt-PT", { weekday: "short", day: "numeric", month: "short" });
+    const shift = (n) => { const nd = new Date(curIso + "T00:00:00"); nd.setDate(nd.getDate() + n); onChange(isoDate(nd)); };
+    return el("div", { class: "row", style: "justify-content:center;gap:8px;margin:2px 0 12px" }, [
+      el("button", { class: "btn btn-ghost btn-sm", text: "‹", onclick: () => shift(-1) }),
+      el("button", { class: "btn " + (isToday ? "btn-soft" : "btn-primary") + " btn-sm", style: "min-width:140px", text: label, title: "Voltar a hoje", onclick: () => onChange(todayISO()) }),
+      el("button", { class: "btn btn-ghost btn-sm", text: "›", onclick: () => shift(1) }),
+    ]);
+  }
+
   global.UI = { el, $, $$, clear, eur, eur0, num, todayISO, isoDate, monthKey, prettyDate, prettyMonth, MONTHS, DAYS, pad,
-    toast, sheet, confirm, field, bar, toneFor, ring, donut, sparkBars, colorFor, svgIcon, uid };
+    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, sparkBars, lineChart, colorFor, svgIcon, uid, dateNav };
 })(window);

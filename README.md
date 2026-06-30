@@ -17,7 +17,13 @@ sw.js                   Service worker (offline + instalável)
 icons/                  Ícones das apps
 ```
 
-As três apps partilham a mesma origem, por isso o **Life OS lê automaticamente** os dados de Nutrição (kcal/proteína em falta) e Finanças (dinheiro livre), e a Nutrição ajusta os alvos quando há treino (hábito "Ginásio" do Life OS).
+As três apps partilham a mesma origem, por isso o **Life OS lê automaticamente** os dados de Nutrição (kcal/proteína em falta) e Finanças (dinheiro livre), e a Nutrição ajusta os alvos quando há treino.
+
+### Integração com a app de Ginásio (gymos)
+
+A suite lê diretamente os treinos da tua app existente em `rblucas2.github.io/gymos/` (chave `treino_state` no localStorage). O widget de Treino do Life OS mostra a streak e o treino do dia, e a Nutrição aumenta os hidratos/calorias em dias de treino (ciclismo de nutrientes).
+
+> ⚠️ **Para isto funcionar, esta suite tem de estar na MESMA origem que o gymos** — ou seja, publicada na tua conta GitHub Pages (`rblucas2.github.io/<repo>/`). O Netlify usa outra origem e **não** partilha dados com o gymos. O URL do gymos é configurável em Definições.
 
 ## Como pôr online (grátis) — GitHub Pages
 
@@ -68,6 +74,11 @@ Por defeito cada dispositivo guarda os seus dados. Para os teres iguais em todo 
 
 ## Notas técnicas
 
-- **Nutrição:** Mifflin-St Jeor (TMB/GETD), scanner via câmara (html5-qrcode + Open Food Facts), Macro Solver, refeições pré-guardadas, ciclismo de nutrientes em dias de treino.
-- **Finanças:** importação CSV do banco com mapeamento de colunas e categorização automática, orçamentos com alertas, dinheiro livre, dashboard (donut, top despesas, essenciais vs. estilo de vida), net worth com histórico.
-- **Life OS:** Top 3, time-blocking, brain dump, hábitos com streaks, pilares com objetivos, revisão semanal e widgets de integração.
+- **Nutrição:** Mifflin-St Jeor (TMB/GETD), scanner via câmara (html5-qrcode + Open Food Facts), Macro Solver, refeições pré-guardadas, ciclismo de nutrientes em dias de treino, **registo e gráfico de peso**, **navegação por datas** no diário.
+- **Finanças:** importação CSV do banco com mapeamento de colunas e **categorização automática que aprende**, **movimentos recorrentes** (renda/ordenado/subscrições), orçamentos com alertas, dinheiro livre, dashboard (donut, top despesas, essenciais vs. estilo de vida), net worth com histórico.
+- **Life OS:** Top 3, time-blocking, brain dump, hábitos com streaks, pilares com objetivos, revisão semanal, widgets de integração e **navegação por datas** (planear amanhã / rever ontem).
+- **Transversal:** tema claro/escuro automático, **sincronização grátis com merge sem perdas**, **anular** ao apagar, onboarding na 1ª utilização, gerador de ícones iOS em `tools/icones.html`.
+
+### Ícones no iPhone (opcional)
+
+Os ícones são SVG (perfeitos no Android). Para o iPhone, abre `tools/icones.html`, gera os PNG, guarda-os em `icons/` e aponta os `apple-touch-icon` nesses ficheiros.
