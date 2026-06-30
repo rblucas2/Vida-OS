@@ -1,0 +1,13 @@
+{
+  "name": "Finanças",
+  "short_name": "Finanças",
+  "description": "Gestão financeira pessoal: transações, orçamentos e património.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#2e9e5b",
+  "icons": [
+    { "src": "../icons/finance.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,46 @@
+/* Service worker — app shell offline para a suite Vida OS */
+const VERSION = "vidaos-v1";
+const CORE = [
+  "./", "./index.html",
+  "./shared/base.css", "./shared/store.js", "./shared/sync.js",
+  "./shared/ui.js", "./shared/domain.js", "./shared/app.js",
+  "./lifeos/", "./lifeos/index.html", "./lifeos/lifeos.js",
+  "./finance/", "./finance/index.html", "./finance/finance.js",
+  "./nutrition/", "./nutrition/index.html", "./nutrition/nutrition.js",
+];
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(
+    caches.open(VERSION).then((c) => Promise.allSettled(CORE.map((u) => c.add(u)))).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  // Não interferir com chamadas externas (Open Food Facts, Supabase)
+  if (url.origin !== location.origin) return;
+
+  if (req.mode === "navigate") {
+    // network-first para páginas (apanha atualizações), cai para cache offline
+    e.respondWith(
+      fetch(req).then((r) => { caches.open(VERSION).then((c) => c.put(req, r.clone())); return r; })
+        .catch(() => caches.match(req).then((m) => m || caches.match("./index.html")))
+    );
+    return;
+  }
+  // cache-first para estáticos
+  e.respondWith(
+    caches.match(req).then((m) => m || fetch(req).then((r) => {
+      if (r.ok) { const cp = r.clone(); caches.open(VERSION).then((c) => c.put(req, cp)); }
+      return r;
+    }).catch(() => m))
+  );
+});

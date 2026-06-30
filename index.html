@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>Vida OS</title>
+  <meta name="theme-color" content="#f6f6f4" />
+  <link rel="stylesheet" href="./shared/base.css" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/launcher.svg" />
+  <style>
+    .hero { text-align:center; padding: 38px 0 10px; }
+    .hero h1 { font-size: 1.9rem; letter-spacing:-.03em; margin:0 0 4px; }
+    .launch { display:grid; gap:14px; margin-top:18px; }
+    .launch a { text-decoration:none; color:inherit; }
+    .applink { display:flex; align-items:center; gap:16px; }
+    .applink .ic { width:54px; height:54px; border-radius:16px; display:flex; align-items:center; justify-content:center; flex:none; color:#fff; }
+    .applink .t { font-size:1.1rem; font-weight:650; }
+    .applink .d { font-size:.84rem; color:var(--text-soft); }
+    .applink .arrow { margin-left:auto; color:var(--text-mute); }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="hero">
+      <h1>Vida OS</h1>
+      <p class="muted">O teu sistema pessoal · minimalista, privado, offline</p>
+    </div>
+
+    <div class="launch">
+      <a href="./lifeos/"><div class="card applink">
+        <div class="ic" style="background:#3b6ef5">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/></svg>
+        </div>
+        <div><div class="t">Life OS</div><div class="d">Tarefas, hábitos, pilares e revisão semanal</div></div>
+        <div class="arrow">›</div>
+      </div></a>
+
+      <a href="./finance/"><div class="card applink">
+        <div class="ic" style="background:#2e9e5b">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div><div class="t">Finanças</div><div class="d">Transações, orçamentos e património</div></div>
+        <div class="arrow">›</div>
+      </div></a>
+
+      <a href="./nutrition/"><div class="card applink">
+        <div class="ic" style="background:#d9743b">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v7a3 3 0 0 0 6 0V2M9 2v20M16 2c-1.5 1-2 3-2 6s.5 4 2 5v9"/></svg>
+        </div>
+        <div><div class="t">Nutrição</div><div class="d">Calorias, macros, scanner e diário</div></div>
+        <div class="arrow">›</div>
+      </div></a>
+    </div>
+
+    <button class="btn btn-block" style="margin-top:24px" id="settings">Definições · Sincronização · Tema</button>
+    <p class="tiny muted center" style="margin-top:20px">Instala cada app no telemóvel pelo menu do browser → "Adicionar ao ecrã principal".</p>
+  </main>
+
+  <script src="./shared/ui.js"></script>
+  <script src="./shared/store.js"></script>
+  <script src="./shared/sync.js"></script>
+  <script src="./shared/domain.js"></script>
+  <script src="./shared/app.js"></script>
+  <script>
+    App.boot({});
+    document.getElementById("settings").addEventListener("click", App.openSettings);
+  </script>
+</body>
+</html>

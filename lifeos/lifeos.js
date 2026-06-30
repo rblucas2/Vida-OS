@@ -1,0 +1,306 @@
+/* =====================================================================
+   Life OS — Dashboard pessoal diário
+   ===================================================================== */
+(function () {
+  const { el, $, clear, num, eur0, toast, sheet, field, bar, uid, todayISO, isoDate } = UI;
+  const D = Domain;
+  const NS = "los";
+  const BLOCKS = [{ id: "manha", label: "Manhã", icon: "🌅" }, { id: "tarde", label: "Tarde", icon: "☀️" }, { id: "noite", label: "Noite", icon: "🌙" }];
+
+  function init() {
+    App.boot({ active: "lifeos" });
+    Store.ensure(NS, { days: {}, brainDump: "", pillars: [], habits: [], habitLog: {}, reviews: {} });
+    seedIfEmpty();
+    $("#settingsBtn").addEventListener("click", App.openSettings);
+    const tabs = $("#tabs");
+    tabs.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-tab]"); if (!b) return;
+      [...tabs.children].forEach((c) => c.classList.toggle("active", c === b));
+      render(b.dataset.tab);
+    });
+    Store.subscribe(NS, () => render(current));
+    Store.subscribe("nut", () => { if (current === "hoje") render("hoje"); });
+    Store.subscribe("fin", () => { if (current === "hoje") render("hoje"); });
+    render("hoje");
+  }
+
+  function seedIfEmpty() {
+    const s = Store.get(NS);
+    if (!s.habits.length && !s._seeded) {
+      Store.update(NS, (st) => {
+        st.habits = [{ id: uid(), name: "Beber água" }, { id: uid(), name: "Ler" }, { id: uid(), name: "Ginásio" }];
+        st.pillars = [
+          { id: uid(), name: "Saúde", goals: [] }, { id: uid(), name: "Finanças", goals: [] },
+          { id: uid(), name: "Conhecimento", goals: [] }, { id: uid(), name: "Trabalho", goals: [] },
+        ];
+        st._seeded = true;
+      }, { silent: true });
+    }
+  }
+
+  let current = "hoje";
+  function render(tab) {
+    current = tab;
+    const view = clear($("#view"));
+    ({ hoje: renderHoje, habits: renderHabits, pillars: renderPillars, review: renderReview }[tab] || renderHoje)(view);
+  }
+
+  function today() { const s = Store.get(NS); s.days[todayISO()] = s.days[todayISO()] || { tasks: [] }; return s.days[todayISO()]; }
+
+  /* ----------------------------- HOJE ----------------------------- */
+  function renderHoje(view) {
+    $("#subtitle").textContent = new Date().toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+    const los = Store.get(NS);
+    const day = today();
+
+    view.appendChild(integrationWidgets());
+
+    // Top 3
+    const tops = day.tasks.filter((t) => t.top);
+    const top3 = el("div", { class: "card" }, [
+      el("div", { class: "row", style: "justify-content:space-between" }, [
+        el("strong", { html: "🎯 Top 3 de hoje" }),
+        el("span", { class: "tiny muted", text: tops.length + "/3" }),
+      ]),
+    ]);
+    if (!tops.length) top3.appendChild(el("div", { class: "empty tiny", text: "Define até 3 prioridades absolutas para hoje." }));
+    const tl = el("div", { class: "list" });
+    tops.forEach((t) => tl.appendChild(taskRow(t)));
+    top3.appendChild(tl);
+    if (tops.length < 3) top3.appendChild(el("button", { class: "btn btn-soft btn-block btn-sm", style: "margin-top:10px", text: "+ Adicionar prioridade", onclick: () => addTask(true) }));
+
+    // Time-blocking
+    const planCard = el("div", { class: "card" }, [el("strong", { html: "🗓️ Plano do dia" })]);
+    BLOCKS.forEach((bl) => {
+      const tasks = day.tasks.filter((t) => t.block === bl.id);
+      const head = el("div", { class: "row", style: "justify-content:space-between;margin-top:12px" }, [
+        el("span", { class: "section-title", style: "margin:0", text: bl.icon + " " + bl.label }),
+        el("button", { class: "btn btn-ghost btn-sm", text: "+", onclick: () => addTask(false, bl.id) }),
+      ]);
+      planCard.appendChild(head);
+      if (!tasks.length) planCard.appendChild(el("div", { class: "tiny muted", style: "padding:2px 2px 4px", text: "—" }));
+      const list = el("div", { class: "list" });
+      tasks.forEach((t) => list.appendChild(taskRow(t)));
+      planCard.appendChild(list);
+    });
+    // tarefas sem bloco
+    const unb = day.tasks.filter((t) => !t.block);
+    if (unb.length) {
+      planCard.appendChild(el("div", { class: "section-title", text: "Sem horário" }));
+      const list = el("div", { class: "list" }); unb.forEach((t) => list.appendChild(taskRow(t))); planCard.appendChild(list);
+    }
+
+    // Brain dump
+    const dump = el("textarea", { placeholder: "Descarga mental — escreve aqui ideias, links, lembretes…", style: "min-height:110px" });
+    dump.value = los.brainDump || "";
+    let dumpT;
+    dump.addEventListener("input", () => { clearTimeout(dumpT); dumpT = setTimeout(() => Store.update(NS, (s) => { s.brainDump = dump.value; }, { silent: true }), 500); });
+    const dumpCard = el("div", { class: "card" }, [el("strong", { html: "🧠 Descarga mental" }), el("div", { style: "margin-top:10px" }, [dump])]);
+
+    view.appendChild(el("div", { class: "stack" }, [top3, planCard, dumpCard]));
+    view.appendChild(el("button", { class: "fab", text: "+", onclick: () => addTask(false), "aria-label": "Nova tarefa" }));
+  }
+
+  function taskRow(t) {
+    const cb = el("button", { class: "btn btn-icon btn-ghost", style: "width:28px;height:28px;border:2px solid " + (t.done ? "var(--good)" : "var(--border)") + ";background:" + (t.done ? "var(--good)" : "transparent") + ";color:#fff;font-size:.8rem;flex:none", html: t.done ? "✓" : "", onclick: () => toggleTask(t.id) });
+    const star = el("button", { class: "btn btn-ghost btn-sm", style: "color:" + (t.top ? "var(--accent)" : "var(--text-mute)"), text: t.top ? "★" : "☆", onclick: () => toggleTop(t.id) });
+    return el("div", { class: "item", style: "padding:9px 2px" }, [
+      cb,
+      el("div", { class: "grow", style: "cursor:pointer", onclick: () => editTask(t) }, [
+        el("div", { class: "t", style: t.done ? "text-decoration:line-through;color:var(--text-mute)" : "", text: t.text }),
+      ]),
+      star,
+    ]);
+  }
+
+  function toggleTask(id) { Store.update(NS, (s) => { const t = s.days[todayISO()].tasks.find((x) => x.id === id); if (t) t.done = !t.done; }); }
+  function toggleTop(id) {
+    const day = today();
+    const tops = day.tasks.filter((t) => t.top).length;
+    Store.update(NS, (s) => {
+      const t = s.days[todayISO()].tasks.find((x) => x.id === id);
+      if (t) { if (!t.top && tops >= 3) { toast("Máximo 3 prioridades — é essa a ideia 🙂"); return; } t.top = !t.top; }
+    });
+  }
+  function addTask(top, block) {
+    if (top && today().tasks.filter((t) => t.top).length >= 3) return toast("Já tens 3 prioridades.");
+    const fText = field("Tarefa", { placeholder: "O que precisas de fazer?" });
+    const fBlock = field("Bloco", { type: "select", value: block || "", options: [{ value: "", label: "Sem horário" }, ...BLOCKS.map((b) => ({ value: b.id, label: b.label }))] });
+    const sh = sheet("Nova tarefa", [fText, fBlock, el("label", { class: "row", style: "gap:8px" }, [el("input", { type: "checkbox", checked: !!top, id: "istop" }), el("span", { text: "Marcar como prioridade (Top 3)" })]),
+      el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
+        const text = fText.input.value.trim(); if (!text) return toast("Escreve a tarefa.");
+        const isTop = $("#istop").checked && today().tasks.filter((t) => t.top).length < 3;
+        Store.update(NS, (s) => { s.days[todayISO()].tasks.push({ id: uid(), text, done: false, block: fBlock.input.value || null, top: isTop }); });
+        sh.close();
+      }})]);
+    setTimeout(() => fText.input.focus(), 50);
+  }
+  function editTask(t) {
+    const fText = field("Tarefa", { value: t.text });
+    const fBlock = field("Bloco", { type: "select", value: t.block || "", options: [{ value: "", label: "Sem horário" }, ...BLOCKS.map((b) => ({ value: b.id, label: b.label }))] });
+    const sh = sheet("Editar tarefa", [fText, fBlock, el("div", { class: "row", style: "gap:10px" }, [
+      el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { const d = s.days[todayISO()]; d.tasks = d.tasks.filter((x) => x.id !== t.id); }); sh.close(); } }),
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { Store.update(NS, (s) => { const x = s.days[todayISO()].tasks.find((y) => y.id === t.id); if (x) { x.text = fText.input.value.trim() || x.text; x.block = fBlock.input.value || null; } }); sh.close(); } }),
+    ])]);
+  }
+
+  /* --------------------- Widgets de integração --------------------- */
+  function integrationWidgets() {
+    const los = Store.get(NS), nut = Store.get("nut"), fin = Store.get("fin");
+    const wrap = el("div", { class: "grid-2", style: "grid-template-columns:1fr 1fr 1fr;gap:10px" });
+
+    // Treino / saúde
+    const gymStreak = D.gymStreak(los);
+    const trained = D.workoutDone(nut, los);
+    wrap.appendChild(widget("../lifeos/#habits", "💪", gymStreak + (gymStreak === 1 ? " dia" : " dias"), trained ? "Treino feito ✓" : "Streak ginásio", "var(--accent)", () => switchTab("habits")));
+
+    // Nutrição
+    const ns = D.nutritionSummary(nut, los);
+    if (ns.configured) wrap.appendChild(widget("../nutrition/", "🍎", num(ns.kcalLeft) , ns.kcalLeft >= 0 ? "kcal livres" : "kcal a mais", "var(--good)", () => go("../nutrition/")));
+    else wrap.appendChild(widget("../nutrition/", "🍎", "—", "Configurar", "var(--text-mute)", () => go("../nutrition/")));
+
+    // Finanças
+    const fs = D.financeSummary(fin);
+    wrap.appendChild(widget("../finance/", "💶", eur0(fs.free), "livre p/ gastar", fs.free < 0 ? "var(--bad)" : "var(--good)", () => go("../finance/")));
+
+    return wrap;
+  }
+  function widget(href, icon, big, label, color, onclick) {
+    return el("div", { class: "card", style: "padding:13px 10px;text-align:center;cursor:pointer", onclick }, [
+      el("div", { style: "font-size:1.3rem", text: icon }),
+      el("div", { class: "num", style: "font-size:1.15rem;font-weight:700;color:" + color + ";margin-top:2px;line-height:1.1", text: big }),
+      el("div", { class: "tiny muted", style: "font-size:.66rem", text: label }),
+    ]);
+  }
+  function go(href) { location.href = href; }
+
+  /* ----------------------------- HÁBITOS ----------------------------- */
+  function renderHabits(view) {
+    const los = Store.get(NS);
+    $("#subtitle").textContent = "Rastreador de hábitos";
+    const N = 14; // últimos 14 dias
+    const days = [];
+    for (let i = N - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
+
+    const list = el("div", { class: "stack" });
+    if (!los.habits.length) list.appendChild(el("div", { class: "card empty", text: "Cria hábitos para acompanhares as tuas rotinas." }));
+    los.habits.forEach((h) => {
+      const log = (los.habitLog && los.habitLog[h.id]) || {};
+      const streak = D.habitStreak(los, h.id);
+      const grid = el("div", { class: "row", style: "gap:4px;margin-top:10px;flex-wrap:nowrap;overflow:auto" });
+      days.forEach((d) => {
+        const iso = isoDate(d); const on = !!log[iso]; const isToday = iso === todayISO();
+        grid.appendChild(el("button", { title: iso, style: `flex:1;min-width:20px;aspect-ratio:1;border-radius:6px;border:${isToday ? "2px solid var(--accent)" : "1px solid var(--border)"};background:${on ? "var(--accent)" : "var(--surface-2)"};padding:0`, onclick: () => toggleHabit(h.id, iso) }));
+      });
+      list.appendChild(el("div", { class: "card" }, [
+        el("div", { class: "row", style: "justify-content:space-between" }, [
+          el("strong", { text: h.name }),
+          el("div", { class: "row", style: "gap:8px" }, [
+            el("span", { class: "pill" + (streak > 0 ? " on" : ""), text: "🔥 " + streak }),
+            el("button", { class: "btn btn-ghost btn-sm", text: "✎", onclick: () => editHabit(h) }),
+          ]),
+        ]),
+        grid,
+        el("div", { class: "row", style: "justify-content:space-between;margin-top:4px" }, [
+          el("span", { class: "tiny muted", text: isoDate(days[0]).slice(5) }), el("span", { class: "tiny muted", text: "hoje" }),
+        ]),
+      ]));
+    });
+    view.appendChild(el("div", { class: "stack" }, [el("button", { class: "btn btn-primary btn-block", text: "+ Novo hábito", onclick: () => editHabit(null) }), list]));
+  }
+  function toggleHabit(id, iso) { Store.update(NS, (s) => { s.habitLog = s.habitLog || {}; s.habitLog[id] = s.habitLog[id] || {}; if (s.habitLog[id][iso]) delete s.habitLog[id][iso]; else s.habitLog[id][iso] = true; }); }
+  function editHabit(h) {
+    const isNew = !h; const f = field("Nome do hábito", { value: h ? h.name : "", placeholder: "ex: Meditar, Dormir 8h…" });
+    const sh = sheet(isNew ? "Novo hábito" : "Editar hábito", [f, el("div", { class: "row", style: "gap:10px" }, [
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.habits = s.habits.filter((x) => x.id !== h.id); if (s.habitLog) delete s.habitLog[h.id]; }); sh.close(); } }) : null,
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { const name = f.input.value.trim(); if (!name) return toast("Escreve o nome."); Store.update(NS, (s) => { if (isNew) s.habits.push({ id: uid(), name }); else { const x = s.habits.find((y) => y.id === h.id); if (x) x.name = name; } }); sh.close(); } }),
+    ])]);
+  }
+
+  /* ----------------------------- PILARES ----------------------------- */
+  function renderPillars(view) {
+    const los = Store.get(NS);
+    $("#subtitle").textContent = "Pilares de vida e objetivos";
+    const list = el("div", { class: "stack" });
+    if (!los.pillars.length) list.appendChild(el("div", { class: "card empty", text: "Cria pilares (ex: Saúde, Finanças) e objetivos para cada um." }));
+    los.pillars.forEach((p) => {
+      const done = p.goals.filter((g) => g.done).length; const total = p.goals.length;
+      const pct = total ? (done / total) * 100 : 0;
+      const card = el("div", { class: "card" }, [
+        el("div", { class: "row", style: "justify-content:space-between" }, [
+          el("strong", { text: p.name }),
+          el("div", { class: "row", style: "gap:6px" }, [
+            el("span", { class: "tiny muted num", text: done + "/" + total }),
+            el("button", { class: "btn btn-ghost btn-sm", text: "✎", onclick: () => editPillar(p) }),
+          ]),
+        ]),
+        bar(pct, pct >= 100 ? "good" : ""),
+      ]);
+      const gl = el("div", { class: "list", style: "margin-top:6px" });
+      p.goals.forEach((g) => gl.appendChild(el("div", { class: "item", style: "padding:8px 2px" }, [
+        el("button", { class: "btn btn-icon btn-ghost", style: "width:24px;height:24px;border:2px solid " + (g.done ? "var(--good)" : "var(--border)") + ";background:" + (g.done ? "var(--good)" : "transparent") + ";color:#fff;font-size:.7rem;flex:none", html: g.done ? "✓" : "", onclick: () => toggleGoal(p.id, g.id) }),
+        el("div", { class: "grow t", style: g.done ? "text-decoration:line-through;color:var(--text-mute)" : "", text: g.text }),
+        el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => { Store.update(NS, (s) => { const pp = s.pillars.find((x) => x.id === p.id); pp.goals = pp.goals.filter((x) => x.id !== g.id); }); } }),
+      ])));
+      card.appendChild(gl);
+      card.appendChild(el("button", { class: "btn btn-soft btn-block btn-sm", style: "margin-top:8px", text: "+ Objetivo", onclick: () => addGoal(p.id) }));
+      list.appendChild(card);
+    });
+    view.appendChild(el("div", { class: "stack" }, [el("button", { class: "btn btn-primary btn-block", text: "+ Novo pilar", onclick: () => editPillar(null) }), list]));
+  }
+  function toggleGoal(pid, gid) { Store.update(NS, (s) => { const p = s.pillars.find((x) => x.id === pid); const g = p.goals.find((x) => x.id === gid); if (g) g.done = !g.done; }); }
+  function addGoal(pid) {
+    const f = field("Objetivo", { placeholder: "ex: Poupar 2000€, Ler 12 livros…" });
+    const sh = sheet("Novo objetivo", [f, el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => { const text = f.input.value.trim(); if (!text) return; Store.update(NS, (s) => { s.pillars.find((x) => x.id === pid).goals.push({ id: uid(), text, done: false }); }); sh.close(); } })]);
+    setTimeout(() => f.input.focus(), 50);
+  }
+  function editPillar(p) {
+    const isNew = !p; const f = field("Nome do pilar", { value: p ? p.name : "", placeholder: "ex: Saúde, Conhecimento…" });
+    const sh = sheet(isNew ? "Novo pilar" : "Editar pilar", [f, el("div", { class: "row", style: "gap:10px" }, [
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.pillars = s.pillars.filter((x) => x.id !== p.id); }); sh.close(); } }) : null,
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { const name = f.input.value.trim(); if (!name) return; Store.update(NS, (s) => { if (isNew) s.pillars.push({ id: uid(), name, goals: [] }); else s.pillars.find((x) => x.id === p.id).name = name; }); sh.close(); } }),
+    ])]);
+  }
+
+  /* ----------------------------- REVISÃO SEMANAL ----------------------------- */
+  function weekKey(d = new Date()) {
+    const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = dt.getUTCDay() || 7; dt.setUTCDate(dt.getUTCDate() + 4 - day);
+    const yStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+    const wk = Math.ceil((((dt - yStart) / 86400000) + 1) / 7);
+    return dt.getUTCFullYear() + "-S" + String(wk).padStart(2, "0");
+  }
+  function renderReview(view) {
+    const los = Store.get(NS);
+    const wk = weekKey();
+    const r = (los.reviews && los.reviews[wk]) || { good: "", bad: "", improve: "", focus: "" };
+    $("#subtitle").textContent = "Revisão semanal · " + wk;
+
+    const isWeekend = [0, 6].includes(new Date().getDay());
+    const banner = isWeekend ? el("div", { class: "card", style: "background:var(--accent-soft);border-color:transparent" }, [el("div", { class: "tiny", style: "color:var(--accent)", text: "✨ Fim de semana — bom momento para refletir sobre os últimos 7 dias." })]) : null;
+
+    const fGood = field("O que correu bem?", { type: "textarea", value: r.good });
+    const fBad = field("O que falhou ou ficou por fazer?", { type: "textarea", value: r.bad });
+    const fImp = field("O que podes melhorar?", { type: "textarea", value: r.improve });
+    const fFocus = field("Foco para a próxima semana", { type: "textarea", value: r.focus });
+
+    const save = () => Store.update(NS, (s) => { s.reviews = s.reviews || {}; s.reviews[wk] = { good: fGood.input.value, bad: fBad.input.value, improve: fImp.input.value, focus: fFocus.input.value, savedAt: Date.now() }; }, { silent: true });
+    [fGood, fBad, fImp, fFocus].forEach((f) => f.input.addEventListener("input", () => { clearTimeout(window.__rv); window.__rv = setTimeout(save, 600); }));
+
+    // histórico
+    const past = Object.entries(los.reviews || {}).filter(([k]) => k !== wk).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 8);
+    const pastCard = past.length ? el("div", { class: "card" }, [el("strong", { text: "Revisões anteriores" }),
+      ...past.map(([k, v]) => el("details", { style: "margin-top:8px" }, [
+        el("summary", { class: "tiny", style: "cursor:pointer;font-weight:600", text: k }),
+        el("div", { class: "tiny muted", style: "padding:6px 0", html: `<b>Bem:</b> ${esc(v.good) || "—"}<br><b>Falhou:</b> ${esc(v.bad) || "—"}<br><b>Foco:</b> ${esc(v.focus) || "—"}` }),
+      ]))]) : null;
+
+    view.appendChild(el("div", { class: "stack" }, [banner, el("div", { class: "card stack" }, [fGood, fBad, fImp, fFocus]),
+      el("div", { class: "tiny muted center", text: "Guardado automaticamente ✓" }), pastCard].filter(Boolean)));
+  }
+  function esc(s) { return (s || "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])); }
+
+  function switchTab(tab) { const tabs = $("#tabs"); [...tabs.children].forEach((c) => c.classList.toggle("active", c.dataset.tab === tab)); render(tab); }
+
+  document.addEventListener("DOMContentLoaded", init);
+})();

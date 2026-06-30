@@ -1,0 +1,13 @@
+{
+  "name": "Vida OS",
+  "short_name": "Vida OS",
+  "description": "O teu sistema pessoal: Life OS, Finanças e Nutrição.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#3b6ef5",
+  "icons": [
+    { "src": "./icons/launcher.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

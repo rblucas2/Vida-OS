@@ -1,0 +1,13 @@
+{
+  "name": "Life OS",
+  "short_name": "Life OS",
+  "description": "Dashboard pessoal diário: tarefas, hábitos, pilares e revisão semanal.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#3b6ef5",
+  "icons": [
+    { "src": "../icons/lifeos.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

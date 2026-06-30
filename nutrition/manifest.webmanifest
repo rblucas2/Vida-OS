@@ -1,0 +1,13 @@
+{
+  "name": "Nutrição",
+  "short_name": "Nutrição",
+  "description": "Nutrição e macros: calculadora, scanner de código de barras e diário.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#d9743b",
+  "icons": [
+    { "src": "../icons/nutrition.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

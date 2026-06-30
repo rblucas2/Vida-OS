@@ -1,0 +1,184 @@
+/* =====================================================================
+   ui.js — utilitários de interface partilhados (sem dependências)
+   ===================================================================== */
+(function (global) {
+  // --- Criação de elementos -------------------------------------------
+  function el(tag, attrs = {}, children = []) {
+    const e = document.createElement(tag);
+    for (const k in attrs) {
+      const v = attrs[k];
+      if (k === "class") e.className = v;
+      else if (k === "html") e.innerHTML = v;
+      else if (k === "text") e.textContent = v;
+      else if (k === "dataset") Object.assign(e.dataset, v);
+      else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (v === true) e.setAttribute(k, "");
+      else if (v !== false && v != null) e.setAttribute(k, v);
+    }
+    (Array.isArray(children) ? children : [children]).forEach((c) => {
+      if (c == null || c === false) return;
+      e.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+    });
+    return e;
+  }
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const clear = (n) => { while (n && n.firstChild) n.removeChild(n.firstChild); return n; };
+
+  // --- Formatação ------------------------------------------------------
+  const eur = (n) => (isFinite(n) ? n : 0).toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
+  const eur0 = (n) => (isFinite(n) ? n : 0).toLocaleString("pt-PT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const num = (n, d = 0) => (isFinite(n) ? n : 0).toLocaleString("pt-PT", { maximumFractionDigits: d });
+  const pad = (n) => String(n).padStart(2, "0");
+  const todayISO = () => isoDate(new Date());
+  function isoDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+  function monthKey(d = new Date()) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; }
+  const MONTHS = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const DAYS = ["dom","seg","ter","qua","qui","sex","sáb"];
+  function prettyDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso + (iso.length === 10 ? "T00:00:00" : ""));
+    return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0,3)}`;
+  }
+  function prettyMonth(mk) {
+    const [y, m] = mk.split("-").map(Number);
+    return `${MONTHS[m - 1]} ${y}`;
+  }
+
+  // --- Toast -----------------------------------------------------------
+  function toast(msg, ms = 2200) {
+    let host = $("#toast");
+    if (!host) { host = el("div", { id: "toast" }); document.body.appendChild(host); }
+    const t = el("div", { class: "t", text: msg });
+    host.appendChild(t);
+    setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); }, ms);
+  }
+
+  // --- Sheet / Modal ---------------------------------------------------
+  function sheet(title, contentNodes, { onClose } = {}) {
+    const body = el("div", { class: "form-grid" }, contentNodes);
+    const sheetEl = el("div", { class: "sheet" }, [el("h2", { text: title }), body]);
+    const scrim = el("div", { class: "scrim" }, [sheetEl]);
+    function close() { scrim.remove(); document.body.style.overflow = ""; onClose && onClose(); }
+    scrim.addEventListener("click", (e) => { if (e.target === scrim) close(); });
+    document.body.appendChild(scrim);
+    document.body.style.overflow = "hidden";
+    return { close, body, el: sheetEl };
+  }
+
+  function confirm(msg, { ok = "Confirmar", danger = false } = {}) {
+    return new Promise((resolve) => {
+      const s = sheet("Confirmar", [
+        el("p", { class: "muted", text: msg }),
+        el("div", { class: "row", style: "gap:10px;margin-top:6px" }, [
+          el("button", { class: "btn btn-block", text: "Cancelar", onclick: () => { s.close(); resolve(false); } }),
+          el("button", { class: "btn btn-block " + (danger ? "" : "btn-primary"), style: danger ? "background:var(--bad);color:#fff" : "", text: ok, onclick: () => { s.close(); resolve(true); } }),
+        ]),
+      ]);
+    });
+  }
+
+  /** Campo de formulário rápido. type: text|number|date|select|textarea */
+  function field(label, opts = {}) {
+    const { type = "text", value = "", options, ...rest } = opts;
+    let input;
+    if (type === "select") {
+      input = el("select", rest);
+      (options || []).forEach((o) => {
+        const ov = typeof o === "object" ? o.value : o;
+        const ol = typeof o === "object" ? o.label : o;
+        input.appendChild(el("option", { value: ov, selected: String(ov) === String(value) }, ol));
+      });
+    } else if (type === "textarea") {
+      input = el("textarea", rest); input.value = value;
+    } else {
+      input = el("input", { type, ...rest }); input.value = value;
+    }
+    const wrap = el("label", { class: "field" }, [label ? el("span", { text: label }) : null, input]);
+    wrap.input = input;
+    return wrap;
+  }
+
+  // --- Progress bar ----------------------------------------------------
+  function bar(pct, tone) {
+    const p = Math.max(0, Math.min(100, pct));
+    const cls = tone ? " " + tone : "";
+    return el("div", { class: "bar" + cls }, [el("i", { style: `width:${p}%` })]);
+  }
+  function toneFor(pct) { return pct >= 100 ? "bad" : pct >= 85 ? "warn" : "good"; }
+
+  // --- Anel SVG (progresso circular) ----------------------------------
+  function ring(pct, { size = 120, stroke = 11, label, sub, color } = {}) {
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const p = Math.max(0, Math.min(100, pct));
+    const off = c * (1 - p / 100);
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "ring"); svg.setAttribute("width", size); svg.setAttribute("height", size);
+    svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+    const mk = (extra) => { const ci = document.createElementNS(ns, "circle"); ci.setAttribute("cx", size/2); ci.setAttribute("cy", size/2); ci.setAttribute("r", r); ci.setAttribute("fill", "none"); ci.setAttribute("stroke-width", stroke); for (const k in extra) ci.setAttribute(k, extra[k]); return ci; };
+    svg.appendChild(mk({ stroke: "var(--surface-2)" }));
+    svg.appendChild(mk({ stroke: color || "var(--accent)", "stroke-linecap": "round", "stroke-dasharray": c, "stroke-dashoffset": off, transform: `rotate(-90 ${size/2} ${size/2})`, style: "transition:stroke-dashoffset .5s cubic-bezier(.2,.8,.2,1)" }));
+    if (label != null) { const t = document.createElementNS(ns, "text"); t.setAttribute("x", "50%"); t.setAttribute("y", sub ? "46%" : "52%"); t.setAttribute("text-anchor", "middle"); t.setAttribute("font-size", size * .2); t.setAttribute("font-weight", "700"); t.textContent = label; svg.appendChild(t); }
+    if (sub) { const t = document.createElementNS(ns, "text"); t.setAttribute("x", "50%"); t.setAttribute("y", "62%"); t.setAttribute("text-anchor", "middle"); t.setAttribute("font-size", size * .1); t.setAttribute("fill", "var(--text-soft)"); t.textContent = sub; svg.appendChild(t); }
+    return svg;
+  }
+
+  // --- Donut categórico (lista de {label,value,color}) -----------------
+  function donut(parts, { size = 150, stroke = 22 } = {}) {
+    const ns = "http://www.w3.org/2000/svg";
+    const r = (size - stroke) / 2, c = 2 * Math.PI * r, cx = size / 2;
+    const total = parts.reduce((a, b) => a + b.value, 0) || 1;
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("width", size); svg.setAttribute("height", size); svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+    let acc = 0;
+    const base = document.createElementNS(ns, "circle");
+    base.setAttribute("cx", cx); base.setAttribute("cy", cx); base.setAttribute("r", r); base.setAttribute("fill", "none"); base.setAttribute("stroke", "var(--surface-2)"); base.setAttribute("stroke-width", stroke);
+    svg.appendChild(base);
+    parts.forEach((p) => {
+      if (p.value <= 0) return;
+      const frac = p.value / total;
+      const ci = document.createElementNS(ns, "circle");
+      ci.setAttribute("cx", cx); ci.setAttribute("cy", cx); ci.setAttribute("r", r); ci.setAttribute("fill", "none");
+      ci.setAttribute("stroke", p.color); ci.setAttribute("stroke-width", stroke);
+      ci.setAttribute("stroke-dasharray", `${c * frac} ${c * (1 - frac)}`);
+      ci.setAttribute("stroke-dashoffset", -c * acc);
+      ci.setAttribute("transform", `rotate(-90 ${cx} ${cx})`);
+      svg.appendChild(ci);
+      acc += frac;
+    });
+    return svg;
+  }
+
+  // --- Mini gráfico de barras / linha (histórico) ----------------------
+  function sparkBars(values, { height = 60, color = "var(--accent)", labels } = {}) {
+    const max = Math.max(1, ...values.map((v) => Math.abs(v)));
+    const wrap = el("div", { class: "row", style: `align-items:flex-end;gap:6px;height:${height}px` });
+    values.forEach((v, i) => {
+      const h = Math.max(3, (Math.abs(v) / max) * height);
+      const col = el("div", { style: "flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:4px;align-items:center" }, [
+        el("div", { style: `width:100%;max-width:34px;height:${h}px;border-radius:5px;background:${v < 0 ? "var(--bad)" : color};opacity:${0.45 + 0.55 * (Math.abs(v) / max)}` }),
+        labels ? el("div", { class: "tiny muted", style: "font-size:.62rem", text: labels[i] || "" }) : null,
+      ]);
+      wrap.appendChild(col);
+    });
+    return wrap;
+  }
+
+  // Paleta determinística por nome de categoria
+  const PALETTE = ["#3b6ef5","#2e9e5b","#d99a2b","#d9534f","#8e5bd9","#16a3a3","#e06ba3","#5b7cd9","#7a9e2e","#c1672e"];
+  function colorFor(str) {
+    let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return PALETTE[h % PALETTE.length];
+  }
+
+  function svgIcon(path, size = 24) {
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  }
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  global.UI = { el, $, $$, clear, eur, eur0, num, todayISO, isoDate, monthKey, prettyDate, prettyMonth, MONTHS, DAYS, pad,
+    toast, sheet, confirm, field, bar, toneFor, ring, donut, sparkBars, colorFor, svgIcon, uid };
+})(window);
