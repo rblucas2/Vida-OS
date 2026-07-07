@@ -9,11 +9,11 @@
 
   function init() {
     App.boot({ active: "lifeos" });
-    Store.ensure(NS, { days: {}, brainDump: "", pillars: [], habits: [], habitLog: {}, reviews: {} });
+    Store.ensure(NS, { days: {}, brainDump: "", pillars: [], habits: [], habitLog: {}, reviews: {}, journal: {} });
     seedIfEmpty();
-    App.onboard("lifeos", "Life OS", [
+    App.onboard("lifeos", "Espiritual", [
       "🎯 <b>Top 3</b>: define até 3 prioridades absolutas por dia.",
-      "🗓️ <b>Plano do dia</b> por blocos — manhã, tarde e noite.",
+      "📓 <b>Diário</b>: escreve como foi o teu dia e regista o teu humor.",
       "🔥 <b>Hábitos</b> com sequências e <b>Pilares</b> com objetivos.",
       "💪🍎💶 Os widgets ligam-se às tuas apps de Ginásio, Nutrição e Finanças.",
     ]);
@@ -48,7 +48,7 @@
   function render(tab) {
     current = tab;
     const view = clear($("#view"));
-    ({ hoje: renderHoje, habits: renderHabits, pillars: renderPillars, review: renderReview }[tab] || renderHoje)(view);
+    ({ hoje: renderHoje, journal: renderJournal, habits: renderHabits, pillars: renderPillars, review: renderReview }[tab] || renderHoje)(view);
   }
 
   let viewDate = todayISO();
@@ -243,6 +243,43 @@
     ]);
   }
   function go(href) { location.href = href; }
+
+  /* ----------------------------- DIÁRIO ----------------------------- */
+  const MOODS = ["😔", "😕", "😐", "🙂", "😄"];
+  function renderJournal(view) {
+    const los = Store.get(NS);
+    $("#subtitle").textContent = "Diário — como foi o teu dia";
+    const entry = (los.journal && los.journal[viewDate]) || { text: "", mood: null };
+
+    const moodRow = el("div", { class: "row", style: "gap:8px;justify-content:center;margin:4px 0 2px" }, MOODS.map((m, i) => {
+      const on = entry.mood === i;
+      return el("button", { class: "btn btn-icon", style: "font-size:1.4rem;width:46px;height:46px;" + (on ? "background:var(--accent-soft);border-color:var(--accent)" : ""), text: m, onclick: () => {
+        Store.update(NS, (s) => { s.journal = s.journal || {}; s.journal[viewDate] = s.journal[viewDate] || { text: "" }; s.journal[viewDate].mood = i; s.journal[viewDate].at = Date.now(); });
+      }});
+    }));
+
+    const ta = el("textarea", { placeholder: "Escreve sobre o teu dia… O que aconteceu? Como te sentiste? Pelo que estás grato?", style: "min-height:200px;line-height:1.6" });
+    ta.value = entry.text || "";
+    let t; ta.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => Store.update(NS, (s) => { s.journal = s.journal || {}; s.journal[viewDate] = s.journal[viewDate] || {}; s.journal[viewDate].text = ta.value; s.journal[viewDate].at = Date.now(); }, { silent: true }), 500); });
+
+    const prompts = ["O melhor momento de hoje…", "Um desafio que enfrentei…", "Algo por que estou grato…", "O que quero melhorar amanhã…"];
+    const promptRow = el("div", { class: "row wrap", style: "gap:6px;margin-top:8px" }, prompts.map((p) => el("button", { class: "pill", text: p, onclick: () => { ta.value += (ta.value ? "\n\n" : "") + p + " "; ta.focus(); ta.dispatchEvent(new Event("input")); } })));
+
+    // Histórico
+    const past = Object.entries(los.journal || {}).filter(([k, v]) => k !== viewDate && v && (v.text || v.mood != null)).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 30);
+    const histCard = past.length ? el("div", { class: "card" }, [el("strong", { text: "Entradas anteriores" }),
+      ...past.map(([k, v]) => el("div", { class: "item", style: "cursor:pointer", onclick: () => { viewDate = k; render("journal"); } }, [
+        el("div", { style: "font-size:1.2rem", text: v.mood != null ? MOODS[v.mood] : "📝" }),
+        el("div", { class: "grow" }, [el("div", { class: "t", text: UI.prettyDate(k) + " · " + new Date(k + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long" }) }), el("div", { class: "s", text: (v.text || "").slice(0, 60) || "—" })]),
+      ]))]) : null;
+
+    view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("journal"); }));
+    view.appendChild(el("div", { class: "stack" }, [
+      el("div", { class: "card" }, [el("div", { class: "section-title", style: "margin-top:0", text: "Como te sentes?" }), moodRow, el("div", { style: "margin-top:12px" }, [ta]), promptRow]),
+      el("div", { class: "tiny muted center", text: "Guardado automaticamente ✓" }),
+      histCard,
+    ].filter(Boolean)));
+  }
 
   /* ----------------------------- HÁBITOS ----------------------------- */
   function renderHabits(view) {

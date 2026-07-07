@@ -136,11 +136,13 @@
           el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
             el("div", { class: "num", style: "font-weight:800", text: num(got.kcal) }), el("div", { class: "tiny muted", style: "font-size:.6rem", text: "kcal" })]),
         ]),
-        el("div", { class: "macros3", style: "flex:1;min-width:190px" }, [
-          macroCol("Proteína", "var(--good)", got.p, targets.protein),
-          macroCol("Hidratos", "#3b82f6", got.c, targets.carbs),
-          macroCol("Gordura", "var(--warn)", got.f, targets.fat),
-        ]),
+        el("div", { class: "legend", style: "flex:1;min-width:160px" }, dParts.map((p) => {
+          const sum = dParts.reduce((a, b) => a + b.value, 0) || 1;
+          return el("div", { class: "lg" }, [
+            el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
+            el("span", { class: "vl tiny", text: Math.round(p.value / sum * 100) + "% das kcal" }),
+          ]);
+        })),
       ]),
     ]);
 
@@ -194,28 +196,47 @@
       diaryCard.appendChild(list);
     }
 
-    // Micronutrientes
+    // RESUMO DO DIA — macros + micros, com indicação de acima/abaixo da meta
     const REF = D.MICRO_REF;
-    const microRow = (label, val, ref, unit, warn) => {
-      const pct = ref ? Math.min(100, (val / ref) * 100) : 0;
-      const over = warn && val > ref;
-      return el("div", { style: "padding:8px 0;border-bottom:1px solid var(--border)" }, [
-        el("div", { class: "row between" }, [el("span", { class: "tiny", text: label }), el("span", { class: "tiny num muted", text: num(val) + " / " + num(ref) + " " + unit })]),
-        (() => { const b = bar(pct); b.firstChild.style.background = over ? "var(--bad)" : "var(--accent-grad)"; b.className = "bar thin"; b.style.marginTop = "5px"; return b; })(),
+    const nutrientRow = (label, val, tgt, unit, kind) => {
+      const pct = tgt ? Math.min(100, (val / tgt) * 100) : 0;
+      let status, color;
+      if (kind === "limit") {
+        if (val > tgt) { status = "↑ " + num(val - tgt) + unit + " acima do limite"; color = "var(--bad)"; }
+        else { status = "✓ dentro do limite"; color = "var(--good)"; }
+      } else {
+        if (val >= tgt) { status = "✓ meta atingida"; color = "var(--good)"; }
+        else { status = "↓ faltam " + num(tgt - val) + unit; color = "var(--accent)"; }
+      }
+      const b = bar(pct); b.className = "bar thin"; b.firstChild.style.background = color; b.style.marginTop = "6px";
+      return el("div", { style: "padding:10px 0;border-bottom:1px solid var(--border)" }, [
+        el("div", { class: "row between" }, [
+          el("span", { style: "font-weight:600;font-size:.92rem", text: label }),
+          el("span", { class: "tiny", style: "color:" + color + ";font-weight:650", text: status }),
+        ]),
+        el("div", { class: "row between", style: "margin-top:2px" }, [
+          el("span", { class: "tiny muted num", text: num(val) + " / " + num(tgt) + unit }),
+          el("span", { class: "tiny muted num", text: Math.round(pct) + "%" }),
+        ]),
+        b,
       ]);
     };
-    const microCard = el("div", { class: "card" }, [
-      el("div", { class: "row between" }, [el("strong", { text: "Micronutrientes" }), el("span", { class: "tiny muted", text: "vs. referência diária" })]),
-      el("div", { style: "margin-top:6px" }, [
-        microRow("Fibra", got.fib, REF.fib, "g"),
-        microRow("Açúcar", got.sug, REF.sug, "g", true),
-        microRow("Gordura saturada", got.sat, REF.sat, "g", true),
-        microRow("Sódio", got.sod, REF.sod, "mg", true),
+    const summaryCard = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [el("strong", { text: "Resumo do dia" }), el("span", { class: "tiny muted", text: "macros e micros" })]),
+      el("div", { style: "margin-top:8px" }, [
+        nutrientRow("Calorias", got.kcal, targets.kcal, " kcal", "goal"),
+        nutrientRow("Proteína", got.p, targets.protein, "g", "goal"),
+        nutrientRow("Hidratos de carbono", got.c, targets.carbs, "g", "goal"),
+        nutrientRow("Gordura", got.f, targets.fat, "g", "goal"),
+        nutrientRow("Fibra", got.fib, REF.fib, "g", "goal"),
+        nutrientRow("Açúcar", got.sug, REF.sug, "g", "limit"),
+        nutrientRow("Gordura saturada", got.sat, REF.sat, "g", "limit"),
+        nutrientRow("Sódio", got.sod, REF.sod, "mg", "limit"),
       ]),
     ]);
 
     view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("hoje"); }));
-    view.appendChild(el("div", { class: "stack" }, [hero, macros, microCard, actions, weekCard, diaryCard]));
+    view.appendChild(el("div", { class: "stack" }, [hero, macros, summaryCard, actions, weekCard, diaryCard]));
     if (nut.meals.length) {
       const qc = el("div", { class: "row wrap", style: "gap:8px;margin-top:12px" });
       nut.meals.forEach((m) => qc.appendChild(el("button", { class: "pill on", text: "+ " + m.nome, onclick: () => logMeal(m) })));

@@ -51,10 +51,10 @@
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   };
   function tabbar(active) {
-    const base = "../";
+    const base = /\/(lifeos|finance|nutrition)\//.test(location.pathname) ? "../" : "./";
     const items = [
       { id: "home", href: base, label: "Início", icon: ICON.grid },
-      { id: "lifeos", href: base + "lifeos/", label: "Life OS", icon: ICON.tasks },
+      { id: "lifeos", href: base + "lifeos/", label: "Espiritual", icon: ICON.tasks },
       { id: "finance", href: base + "finance/", label: "Finanças", icon: ICON.money },
       { id: "nutrition", href: base + "nutrition/", label: "Nutrição", icon: ICON.food },
       { id: "settings", href: "#settings", label: "Ajustes", icon: ICON.settings },

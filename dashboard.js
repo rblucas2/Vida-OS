@@ -7,7 +7,7 @@
   const D = Domain;
 
   function boot() {
-    App.boot({});                    // tema + service worker + sync (sem tabbar)
+    App.boot({ active: "home" });     // tema + service worker + sync + barra inferior consistente
     $("#settingsBtn").addEventListener("click", App.openSettings);
     const gymUrl = Store.get("sys").gymUrl || "https://rblucas2.github.io/gymos/";
     $("#gymLink").href = gymUrl;
@@ -41,19 +41,19 @@
     const los = Store.get("los"), fin = Store.get("fin"), nut = Store.get("nut");
     dash.appendChild(pOperator(los));
     dash.appendChild(pSession(los));
+    dash.appendChild(pGoals(los));
     dash.appendChild(pFinance(fin));
     dash.appendChild(pHabits(los));
     dash.appendChild(pNutrition(nut, los));
     dash.appendChild(pTasks(los));
-    dash.appendChild(pSchedule(los));
-    dash.appendChild(pGoals(los));
+    dash.appendChild(pCalendar(los));
   }
 
   /* 01 — Operador */
   function pOperator(los) {
     const streak = D.gymStreak(los);
     let best = 0; (los.habits || []).forEach((h) => { best = Math.max(best, D.habitStreak(los, h.id)); });
-    return panel("c4", "01", "Operador", "● online", [
+    return panel("c3", "01", "Operador", "● online", [
       el("div", { class: "row", style: "gap:14px" }, [
         el("div", { class: "avatar", text: NAME[0] }),
         el("div", {}, [el("div", { style: "font-weight:800;font-size:1.05rem", text: NAME }), el("div", { class: "tiny muted", text: "A construir o dia." })]),
@@ -70,7 +70,7 @@
     const now = new Date();
     const cap = el("input", { placeholder: "Captura rápida… (Enter para guardar no brain dump)" });
     cap.addEventListener("keydown", (e) => { if (e.key === "Enter" && cap.value.trim()) { Store.update("los", (s) => { s.brainDump = (s.brainDump ? s.brainDump + "\n" : "") + cap.value.trim(); }, { silent: true }); UI.toast("Guardado no brain dump ✓"); cap.value = ""; } });
-    return panel("c8", "02", "Sessão", now.toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" }).toUpperCase(), [
+    return panel("c6", "02", "Sessão", now.toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" }).toUpperCase(), [
       el("div", { class: "row between", style: "align-items:flex-start;gap:16px;flex-wrap:wrap" }, [
         el("div", { class: "greet", html: `${greeting()}, <em>${NAME}</em>.` }),
         el("div", { class: "clock", id: "clockNow", html: "00:00<span class='s'>:00</span>" }),
@@ -102,20 +102,20 @@
     const habits = los.habits || [];
     const done = habits.filter((h) => (los.habitLog && los.habitLog[h.id] && los.habitLog[h.id][todayISO()])).length;
     const pct = habits.length ? Math.round(done / habits.length * 100) : 0;
-    const ring = UI.ring(pct, { size: 74, stroke: 8, label: pct + "%", color: "var(--accent)" });
-    const list = el("div", {});
-    if (!habits.length) list.appendChild(el("div", { class: "emptymini", text: "Sem hábitos. Cria-os no Life OS." }));
+    const score = el("div", { class: "row", style: "gap:16px;align-items:center;margin-bottom:12px" }, [
+      el("div", { style: "flex:none" }, [UI.ring(pct, { size: 68, stroke: 8, label: pct + "", color: "var(--accent)" })]),
+      el("div", {}, [el("div", { class: "dscore", text: pct }), el("div", { class: "tiny muted", text: pct >= 80 ? "No caminho ✓" : pct >= 40 ? "Em progresso" : "Vamos lá 💪" })]),
+    ]);
+    const grid = el("div", { class: "habgrid" });
+    if (!habits.length) grid.appendChild(el("div", { class: "emptymini", text: "Sem hábitos. Cria-os em Espiritual." }));
     habits.slice(0, 6).forEach((h) => {
       const on = !!(los.habitLog && los.habitLog[h.id] && los.habitLog[h.id][todayISO()]);
-      list.appendChild(el("div", { class: "checkline" + (on ? " done" : "") }, [
-        el("div", { class: "cbx" + (on ? " on" : ""), html: on ? "✓" : "", onclick: () => toggleHabit(h.id) }),
-        el("div", { class: "tx", text: h.name }),
-        el("div", { class: "tiny muted", text: "🔥 " + D.habitStreak(los, h.id) }),
+      grid.appendChild(el("div", { class: "habcard" + (on ? " on" : ""), onclick: () => toggleHabit(h.id) }, [
+        el("div", { class: "cbx" + (on ? " on" : ""), html: on ? "✓" : "" }),
+        el("div", { class: "grow" }, [el("div", { class: "nm", text: h.name }), el("div", { class: "tiny muted", text: "🔥 " + D.habitStreak(los, h.id) })]),
       ]));
     });
-    return panel("c5", "04", "Hábitos", done + "/" + habits.length, [
-      el("div", { class: "row", style: "gap:16px;align-items:center" }, [el("div", { style: "flex:none" }, [ring]), el("div", { style: "flex:1" }, [list])]),
-    ]);
+    return panel("c5", "04", "Hábitos", done + "/" + habits.length, [score, grid]);
   }
   function toggleHabit(id) { Store.update("los", (s) => { s.habitLog = s.habitLog || {}; s.habitLog[id] = s.habitLog[id] || {}; const t = todayISO(); if (s.habitLog[id][t]) delete s.habitLog[id][t]; else s.habitLog[id][t] = true; }); }
 
@@ -128,15 +128,25 @@
       const got = D.dayIntake(nut);
       const left = Math.round(t.kcal - got.kcal);
       body.push(el("a", { class: "applink2", href: "./nutrition/" }, [
-        el("div", { class: "hbig num", style: "color:" + (left < 0 ? "var(--bad)" : "var(--text)"), text: num(Math.abs(left)) }),
-        el("div", { class: "tiny muted", text: (left >= 0 ? "kcal restantes" : "kcal a mais") + " · " + num(got.kcal) + "/" + num(t.kcal) }),
+        el("div", { class: "hbig num", style: "color:" + (left < 0 ? "var(--bad)" : "var(--text)"), text: num(got.kcal) }),
+        el("div", { class: "tiny muted", text: "kcal hoje · " + (left >= 0 ? num(left) + " restantes" : num(-left) + " a mais") }),
         el("div", { class: "mini-macros" }, [
-          mm("P", num(got.p) + "/" + num(t.protein), "var(--good)"),
-          mm("C", num(got.c) + "/" + num(t.carbs), "#3b82f6"),
-          mm("G", num(got.f) + "/" + num(t.fat), "var(--warn)"),
+          mm("PROT", num(got.p) + "g", "var(--good)"),
+          mm("HID", num(got.c) + "g", "#3b82f6"),
+          mm("GORD", num(got.f) + "g", "var(--warn)"),
         ]),
       ]));
+      const items = (nut.diary && nut.diary[todayISO()]) || [];
+      if (items.length) {
+        const list = el("div", { style: "margin-top:10px" });
+        items.slice(-4).forEach((it) => list.appendChild(el("div", { class: "meal-item" }, [
+          el("div", { class: "grow", style: "min-width:0" }, [el("div", { style: "font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis", text: it.nome })]),
+          el("div", { class: "tiny num muted", text: num(it.kcal) + " kcal" }),
+        ])));
+        body.push(list);
+      }
     }
+    body.push(el("a", { class: "btn btn-soft btn-block btn-sm", href: "./nutrition/", style: "margin-top:10px;text-decoration:none", text: "+ Registar refeição" }));
     return panel("c3", "05", "Nutrição", "hoje", body);
   }
   function mm(k, v, c) { return el("div", { class: "mm" }, [el("div", { class: "v", style: "color:" + c, text: v }), el("div", { class: "k", text: k })]); }
@@ -156,19 +166,23 @@
   }
   function toggleTask(id) { Store.update("los", (s) => { const d = s.days[todayISO()]; if (!d) return; const t = d.tasks.find((x) => x.id === id); if (t) t.done = !t.done; }); }
 
-  /* 07 — Plano do dia (calendário) */
-  function pSchedule(los) {
+  /* 07 — Calendário (semana + plano do dia) */
+  function pCalendar(los) {
+    const now = new Date(); const dow = (now.getDay() + 6) % 7; const monday = new Date(now); monday.setDate(now.getDate() - dow);
+    const strip = el("div", { class: "weekstrip" });
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday); d.setDate(monday.getDate() + i); const iso = isoDate(d); const isToday = iso === todayISO();
+      const has = !!(los.days && los.days[iso] && los.days[iso].tasks && los.days[iso].tasks.length);
+      strip.appendChild(el("a", { class: "applink2", href: "./lifeos/" }, [el("div", { class: "d" + (isToday ? " sel" : "") }, [
+        el("div", { class: "wn", text: UI.DAYS[d.getDay()] }), el("div", { class: "dn", text: d.getDate() }), has ? el("div", { class: "pt" }) : el("div", { style: "height:5px" }),
+      ])]));
+    }
     const day = (los.days && los.days[todayISO()]) || { tasks: [] };
     const BLOCKS = [{ id: "manha", label: "Manhã" }, { id: "tarde", label: "Tarde" }, { id: "noite", label: "Noite" }];
-    const box = el("div", { class: "schedule" });
-    let any = false;
-    BLOCKS.forEach((b) => {
-      const ts = (day.tasks || []).filter((t) => t.block === b.id);
-      if (!ts.length) return; any = true;
-      ts.forEach((t) => box.appendChild(el("div", { class: "s-item" + (t.done ? " done" : "") }, [el("div", { class: "tm", text: b.label }), el("div", { style: "flex:1;" + (t.done ? "color:var(--text-mute);text-decoration:line-through" : ""), text: t.text })])));
-    });
-    if (!any) box.appendChild(el("div", { class: "emptymini", text: "Nada agendado. Usa o time-blocking no Life OS." }));
-    return panel("c4", "07", "Plano do dia", "", [box]);
+    const box = el("div", { class: "schedule", style: "margin-top:14px" }); let any = false;
+    BLOCKS.forEach((b) => { (day.tasks || []).filter((t) => t.block === b.id).forEach((t) => { any = true; box.appendChild(el("div", { class: "s-item" }, [el("div", { class: "tm", text: b.label }), el("div", { style: "flex:1;" + (t.done ? "color:var(--text-mute);text-decoration:line-through" : ""), text: t.text })])); }); });
+    if (!any) box.appendChild(el("div", { class: "emptymini", text: "Nada agendado hoje. Planeia o dia em Espiritual." }));
+    return panel("c7", "07", "Calendário", now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" }).toUpperCase(), [strip, box]);
   }
 
   /* 08 — Objetivos semana / mês */

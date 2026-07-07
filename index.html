@@ -15,8 +15,8 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <style>
     :root{ --accent:#3b6ef5; --accent-2:#6a4bff; --mono:"JetBrains Mono", ui-monospace, monospace; }
-    body{ padding-bottom: 40px; }
-    .wrap{ max-width: 1240px; margin:0 auto; padding: 0 16px 40px; }
+    .wrap{ max-width: 1240px; margin:0 auto; padding: 0 16px calc(104px + env(safe-area-inset-bottom)); }
+    @media(max-width:759px){ .navpills{ display:none } }
 
     /* Top bar */
     .osbar{ display:flex; align-items:center; gap:14px; padding:16px 4px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
@@ -71,8 +71,18 @@
     .applink2{ text-decoration:none; color:inherit; }
     .schedule .s-item{ display:flex; gap:12px; padding:7px 0; border-bottom:1px solid var(--border); font-size:.88rem; }
     .schedule .s-item:last-child{ border-bottom:0; }
-    .schedule .s-item .tm{ font-family:var(--mono); font-size:.72rem; color:var(--text-soft); min-width:44px; }
+    .schedule .s-item .tm{ font-family:var(--mono); font-size:.72rem; color:var(--text-soft); min-width:56px; text-transform:uppercase; }
     .emptymini{ color:var(--text-mute); font-size:.82rem; padding:8px 0; }
+    .habgrid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .habcard{ display:flex; align-items:center; gap:9px; padding:10px; border:1px solid var(--border); border-radius:11px; background:var(--surface-2); cursor:pointer; transition:.15s; }
+    .habcard.on{ border-color:var(--accent); background:var(--accent-soft); }
+    .habcard .grow{ min-width:0; }
+    .habcard .nm{ font-weight:600; font-size:.84rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .dscore{ font-family:var(--font-num); font-weight:850; font-size:2.4rem; letter-spacing:-.03em; line-height:1; }
+    .meal-item{ display:flex; gap:10px; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); }
+    .meal-item:last-child{ border-bottom:0; }
+    .meal-item .tm{ font-family:var(--mono); font-size:.68rem; color:var(--text-soft); }
+    .logbar{ display:flex; gap:8px; margin-top:10px; }
   </style>
 </head>
 <body>
@@ -81,7 +91,7 @@
       <div class="brand"><span class="glow"></span> VIDA OS <span style="color:var(--text-mute)">// v1</span></div>
       <div class="spacer"></div>
       <nav class="navpills">
-        <a href="./lifeos/">Life OS</a>
+        <a href="./lifeos/">Espiritual</a>
         <a href="./finance/">Finanças</a>
         <a href="./nutrition/">Nutrição</a>
         <a id="gymLink" href="#">Ginásio</a>

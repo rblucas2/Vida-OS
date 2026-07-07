@@ -1,7 +1,7 @@
 {
-  "name": "Life OS",
-  "short_name": "Life OS",
-  "description": "Dashboard pessoal diário: tarefas, hábitos, pilares e revisão semanal.",
+  "name": "Espiritual",
+  "short_name": "Espiritual",
+  "description": "Diário pessoal: tarefas, diário, hábitos, pilares e revisão semanal.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
