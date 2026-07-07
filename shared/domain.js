@@ -95,13 +95,17 @@
     return { date: last, name: (arr[arr.length - 1] || {}).name || "Treino" };
   }
 
-  /** Soma de macros consumidos num dia. */
+  /** Soma de macros e micronutrientes consumidos num dia. */
   function dayIntake(nut, dateISO = todayISO()) {
     const items = (nut.diary && nut.diary[dateISO]) || [];
     return items.reduce((a, it) => ({
       kcal: a.kcal + (it.kcal || 0), p: a.p + (it.p || 0), c: a.c + (it.c || 0), f: a.f + (it.f || 0),
-    }), { kcal: 0, p: 0, c: 0, f: 0 });
+      fib: a.fib + (it.fib || 0), sug: a.sug + (it.sug || 0), sat: a.sat + (it.sat || 0), sod: a.sod + (it.sod || 0),
+    }), { kcal: 0, p: 0, c: 0, f: 0, fib: 0, sug: 0, sat: 0, sod: 0 });
   }
+
+  // Referências diárias aproximadas para micronutrientes (adulto)
+  const MICRO_REF = { fib: 30, sug: 50, sat: 22, sod: 2300 };
 
   /** Resumo de nutrição para o widget do Life OS. */
   function nutritionSummary(nut, los) {
@@ -198,7 +202,7 @@
   }
 
   global.Domain = {
-    ACTIVITY, DEFAULT_RULES, ESSENTIAL_CATS,
+    ACTIVITY, DEFAULT_RULES, ESSENTIAL_CATS, MICRO_REF,
     mifflin, nutritionTargets, baseTargets, effectiveTargets, workoutDone, dayIntake, nutritionSummary,
     categorize, financeSummary, netWorth, isEssential, txInMonth,
     habitStreak, gymStreak,

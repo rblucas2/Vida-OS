@@ -2,72 +2,103 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Vida OS</title>
-  <meta name="theme-color" content="#f6f6f4" />
+  <meta name="theme-color" content="#0e0f13" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./shared/base.css" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" href="./icons/launcher.svg" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <style>
-    .hero { text-align:center; padding: 38px 0 10px; }
-    .hero h1 { font-size: 1.9rem; letter-spacing:-.03em; margin:0 0 4px; }
-    .launch { display:grid; gap:14px; margin-top:18px; }
-    .launch a { text-decoration:none; color:inherit; }
-    .applink { display:flex; align-items:center; gap:16px; }
-    .applink .ic { width:54px; height:54px; border-radius:16px; display:flex; align-items:center; justify-content:center; flex:none; color:#fff; }
-    .applink .t { font-size:1.1rem; font-weight:650; }
-    .applink .d { font-size:.84rem; color:var(--text-soft); }
-    .applink .arrow { margin-left:auto; color:var(--text-mute); }
+    :root{ --accent:#3b6ef5; --accent-2:#6a4bff; --mono:"JetBrains Mono", ui-monospace, monospace; }
+    body{ padding-bottom: 40px; }
+    .wrap{ max-width: 1240px; margin:0 auto; padding: 0 16px 40px; }
+
+    /* Top bar */
+    .osbar{ display:flex; align-items:center; gap:14px; padding:16px 4px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
+      background: color-mix(in srgb, var(--bg) 80%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); flex-wrap:wrap; }
+    .osbar .brand{ font-family:var(--mono); font-weight:700; letter-spacing:.12em; font-size:.82rem; display:flex; align-items:center; gap:8px; }
+    .osbar .brand .glow{ width:9px;height:9px;border-radius:50%;background:var(--accent-grad); box-shadow:0 0 10px var(--accent); }
+    .osbar .spacer{ flex:1; }
+    .osbar .meta{ font-family:var(--mono); font-size:.72rem; color:var(--text-soft); letter-spacing:.06em; display:flex; gap:14px; align-items:center; }
+    .osbar .meta b{ color:var(--text); font-weight:700; }
+    .navpills{ display:flex; gap:6px; flex-wrap:wrap; }
+    .navpills a{ font-family:var(--mono); font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; text-decoration:none; color:var(--text-soft);
+      border:1px solid var(--border); padding:6px 11px; border-radius:8px; transition:.15s; }
+    .navpills a:hover, .navpills a.on{ color:var(--accent); border-color:var(--accent); }
+
+    /* Grid */
+    .dash{ display:grid; grid-template-columns:repeat(12,1fr); gap:14px; margin-top:16px; }
+    .panel{ grid-column: span 12; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; position:relative; box-shadow:var(--sh-1); }
+    .panel > .ph{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .panel .lbl{ font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--text-mute); font-weight:700; }
+    .panel .lbl .ix{ color:var(--accent); }
+    .panel .phmeta{ font-family:var(--mono); font-size:.64rem; color:var(--text-mute); letter-spacing:.08em; }
+    @media(min-width:760px){
+      .c3{ grid-column: span 3 } .c4{ grid-column: span 4 } .c5{ grid-column: span 5 }
+      .c6{ grid-column: span 6 } .c7{ grid-column: span 7 } .c8{ grid-column: span 8 } .c9{ grid-column: span 9 }
+    }
+    @media(min-width:560px) and (max-width:759px){ .c3,.c4,.c5{ grid-column: span 6 } .c6,.c7,.c8,.c9{ grid-column: span 12 } }
+
+    /* Elements */
+    .greet{ font-size:1.7rem; font-weight:800; letter-spacing:-.02em; }
+    .greet em{ color:var(--accent); font-style:normal; }
+    .clock{ font-family:var(--mono); font-weight:700; font-size:2.1rem; letter-spacing:.02em; line-height:1; }
+    .clock .s{ color:var(--text-mute); font-size:1.1rem; }
+    .statline{ display:flex; gap:20px; flex-wrap:wrap; }
+    .stat .n{ font-family:var(--font-num); font-weight:800; font-size:1.35rem; letter-spacing:-.02em; }
+    .stat .l{ font-family:var(--mono); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--text-mute); }
+    .avatar{ width:44px;height:44px;border-radius:12px;background:var(--accent-grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem; }
+    .caprow{ display:flex; gap:8px; }
+    .caprow input{ font-family:inherit; }
+    .hbig{ font-family:var(--font-num); font-weight:850; font-size:2rem; letter-spacing:-.03em; }
+    .checkline{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+    .checkline:last-child{ border-bottom:0; }
+    .cbx{ width:22px;height:22px;border-radius:7px;border:2px solid var(--border-2);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;color:#fff;font-size:.72rem; }
+    .cbx.on{ background:var(--accent-grad); border-color:transparent; }
+    .checkline .tx{ flex:1; font-size:.9rem; }
+    .checkline.done .tx{ color:var(--text-mute); text-decoration:line-through; }
+    .mini-macros{ display:flex; gap:6px; margin-top:8px; }
+    .mini-macros .mm{ flex:1; text-align:center; background:var(--surface-2); border-radius:8px; padding:6px 2px; }
+    .mini-macros .mm .v{ font-family:var(--font-num); font-weight:800; font-size:.92rem; }
+    .mini-macros .mm .k{ font-size:.56rem; color:var(--text-mute); text-transform:uppercase; letter-spacing:.06em; }
+    .goalrow{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+    .goalrow input{ padding:9px 11px; }
+    .applink2{ text-decoration:none; color:inherit; }
+    .schedule .s-item{ display:flex; gap:12px; padding:7px 0; border-bottom:1px solid var(--border); font-size:.88rem; }
+    .schedule .s-item:last-child{ border-bottom:0; }
+    .schedule .s-item .tm{ font-family:var(--mono); font-size:.72rem; color:var(--text-soft); min-width:44px; }
+    .emptymini{ color:var(--text-mute); font-size:.82rem; padding:8px 0; }
   </style>
 </head>
 <body>
-  <main class="app">
-    <div class="hero">
-      <h1>Vida OS</h1>
-      <p class="muted">O teu sistema pessoal · minimalista, privado, offline</p>
-    </div>
-
-    <div class="launch">
-      <a href="./lifeos/"><div class="card applink">
-        <div class="ic" style="background:#3b6ef5">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/></svg>
-        </div>
-        <div><div class="t">Life OS</div><div class="d">Tarefas, hábitos, pilares e revisão semanal</div></div>
-        <div class="arrow">›</div>
-      </div></a>
-
-      <a href="./finance/"><div class="card applink">
-        <div class="ic" style="background:#2e9e5b">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
-        </div>
-        <div><div class="t">Finanças</div><div class="d">Transações, orçamentos e património</div></div>
-        <div class="arrow">›</div>
-      </div></a>
-
-      <a href="./nutrition/"><div class="card applink">
-        <div class="ic" style="background:#d9743b">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v7a3 3 0 0 0 6 0V2M9 2v20M16 2c-1.5 1-2 3-2 6s.5 4 2 5v9"/></svg>
-        </div>
-        <div><div class="t">Nutrição</div><div class="d">Calorias, macros, scanner e diário</div></div>
-        <div class="arrow">›</div>
-      </div></a>
-    </div>
-
-    <button class="btn btn-block" style="margin-top:24px" id="settings">Definições · Sincronização · Tema</button>
-    <p class="tiny muted center" style="margin-top:20px">Instala cada app no telemóvel pelo menu do browser → "Adicionar ao ecrã principal".</p>
-  </main>
+  <div class="wrap">
+    <header class="osbar">
+      <div class="brand"><span class="glow"></span> VIDA OS <span style="color:var(--text-mute)">// v1</span></div>
+      <div class="spacer"></div>
+      <nav class="navpills">
+        <a href="./lifeos/">Life OS</a>
+        <a href="./finance/">Finanças</a>
+        <a href="./nutrition/">Nutrição</a>
+        <a id="gymLink" href="#">Ginásio</a>
+      </nav>
+      <div class="meta" id="topmeta"></div>
+      <button class="btn btn-icon btn-ghost" id="settingsBtn" aria-label="Definições" style="width:34px;height:34px">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5 2 2 0 1 1-4 0 1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3 2 2 0 1 1-2.8-2.8 1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1 2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9 2 2 0 1 1 2.8-2.8 1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5 2 2 0 1 1 4 0 1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3 2 2 0 1 1 2.8 2.8 1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1 2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </header>
+    <div class="dash" id="dash"></div>
+  </div>
 
   <script src="./shared/ui.js"></script>
   <script src="./shared/store.js"></script>
   <script src="./shared/sync.js"></script>
   <script src="./shared/domain.js"></script>
   <script src="./shared/app.js"></script>
-  <script>
-    App.boot({});
-    document.getElementById("settings").addEventListener("click", App.openSettings);
-  </script>
+  <script src="./dashboard.js"></script>
 </body>
 </html>

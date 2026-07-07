@@ -8,19 +8,27 @@
 
   // Alimentos iniciais (por 100g) — base local editável
   const SEED_FOODS = [
-    { id: "f_frango", nome: "Peito de frango grelhado", categoria: "Proteína", calorias: 165, proteina: 31, hidratos: 0, gordura: 3.6 },
-    { id: "f_arroz", nome: "Arroz cozido", categoria: "Hidratos", calorias: 130, proteina: 2.7, hidratos: 28, gordura: 0.3 },
-    { id: "f_ovo", nome: "Ovo", categoria: "Proteína", calorias: 155, proteina: 13, hidratos: 1.1, gordura: 11 },
-    { id: "f_atum", nome: "Atum em água", categoria: "Proteína", calorias: 116, proteina: 26, hidratos: 0, gordura: 1 },
-    { id: "f_aveia", nome: "Flocos de aveia", categoria: "Hidratos", calorias: 389, proteina: 17, hidratos: 66, gordura: 7 },
-    { id: "f_batata", nome: "Batata doce cozida", categoria: "Hidratos", calorias: 90, proteina: 2, hidratos: 21, gordura: 0.1 },
-    { id: "f_banana", nome: "Banana", categoria: "Fruta", calorias: 89, proteina: 1.1, hidratos: 23, gordura: 0.3 },
-    { id: "f_iogurte", nome: "Iogurte grego natural", categoria: "Laticínios", calorias: 97, proteina: 9, hidratos: 4, gordura: 5 },
-    { id: "f_whey", nome: "Proteína whey (pó)", categoria: "Suplemento", calorias: 380, proteina: 80, hidratos: 7, gordura: 5 },
-    { id: "f_azeite", nome: "Azeite", categoria: "Gordura", calorias: 884, proteina: 0, hidratos: 0, gordura: 100 },
-    { id: "f_brocolos", nome: "Brócolos", categoria: "Legumes", calorias: 34, proteina: 2.8, hidratos: 7, gordura: 0.4 },
-    { id: "f_amendoa", nome: "Amêndoas", categoria: "Gordura", calorias: 579, proteina: 21, hidratos: 22, gordura: 50 },
+    { id: "f_frango", nome: "Peito de frango grelhado", categoria: "Proteína", calorias: 165, proteina: 31, hidratos: 0, gordura: 3.6, fibra: 0, acucar: 0, saturadas: 1, sodio: 74 },
+    { id: "f_arroz", nome: "Arroz cozido", categoria: "Hidratos", calorias: 130, proteina: 2.7, hidratos: 28, gordura: 0.3, fibra: 0.4, acucar: 0.1, saturadas: 0.1, sodio: 1 },
+    { id: "f_ovo", nome: "Ovo", categoria: "Proteína", calorias: 155, proteina: 13, hidratos: 1.1, gordura: 11, fibra: 0, acucar: 1.1, saturadas: 3.3, sodio: 124 },
+    { id: "f_atum", nome: "Atum em água", categoria: "Proteína", calorias: 116, proteina: 26, hidratos: 0, gordura: 1, fibra: 0, acucar: 0, saturadas: 0.3, sodio: 247 },
+    { id: "f_aveia", nome: "Flocos de aveia", categoria: "Hidratos", calorias: 389, proteina: 17, hidratos: 66, gordura: 7, fibra: 10, acucar: 1, saturadas: 1.2, sodio: 2 },
+    { id: "f_batata", nome: "Batata doce cozida", categoria: "Hidratos", calorias: 90, proteina: 2, hidratos: 21, gordura: 0.1, fibra: 3, acucar: 6, saturadas: 0, sodio: 36 },
+    { id: "f_banana", nome: "Banana", categoria: "Fruta", calorias: 89, proteina: 1.1, hidratos: 23, gordura: 0.3, fibra: 2.6, acucar: 12, saturadas: 0.1, sodio: 1 },
+    { id: "f_iogurte", nome: "Iogurte grego natural", categoria: "Laticínios", calorias: 97, proteina: 9, hidratos: 4, gordura: 5, fibra: 0, acucar: 4, saturadas: 3.2, sodio: 36 },
+    { id: "f_whey", nome: "Proteína whey (pó)", categoria: "Suplemento", calorias: 380, proteina: 80, hidratos: 7, gordura: 5, fibra: 1, acucar: 6, saturadas: 1.5, sodio: 300 },
+    { id: "f_azeite", nome: "Azeite", categoria: "Gordura", calorias: 884, proteina: 0, hidratos: 0, gordura: 100, fibra: 0, acucar: 0, saturadas: 14, sodio: 2 },
+    { id: "f_brocolos", nome: "Brócolos", categoria: "Legumes", calorias: 34, proteina: 2.8, hidratos: 7, gordura: 0.4, fibra: 2.6, acucar: 1.7, saturadas: 0.1, sodio: 33 },
+    { id: "f_amendoa", nome: "Amêndoas", categoria: "Gordura", calorias: 579, proteina: 21, hidratos: 22, gordura: 50, fibra: 12.5, acucar: 4.4, saturadas: 3.7, sodio: 1 },
   ];
+
+  // Constrói uma entrada de diário (macros + micros) a partir de um alimento e gramas
+  function entryFromFood(food, grams) {
+    const k = grams / 100;
+    return { foodId: food.id, nome: food.nome, grams,
+      kcal: Math.round(food.calorias * k), p: +(food.proteina * k).toFixed(1), c: +(food.hidratos * k).toFixed(1), f: +(food.gordura * k).toFixed(1),
+      fib: +((food.fibra || 0) * k).toFixed(1), sug: +((food.acucar || 0) * k).toFixed(1), sat: +((food.saturadas || 0) * k).toFixed(1), sod: Math.round((food.sodio || 0) * k) };
+  }
 
   const PLAN_DAYS = [
     { id: "seg", label: "Segunda", g: 1 }, { id: "ter", label: "Terça", g: 2 }, { id: "qua", label: "Quarta", g: 3 },
@@ -174,8 +182,28 @@
       diaryCard.appendChild(list);
     }
 
+    // Micronutrientes
+    const REF = D.MICRO_REF;
+    const microRow = (label, val, ref, unit, warn) => {
+      const pct = ref ? Math.min(100, (val / ref) * 100) : 0;
+      const over = warn && val > ref;
+      return el("div", { style: "padding:8px 0;border-bottom:1px solid var(--border)" }, [
+        el("div", { class: "row between" }, [el("span", { class: "tiny", text: label }), el("span", { class: "tiny num muted", text: num(val) + " / " + num(ref) + " " + unit })]),
+        (() => { const b = bar(pct); b.firstChild.style.background = over ? "var(--bad)" : "var(--accent-grad)"; b.className = "bar thin"; b.style.marginTop = "5px"; return b; })(),
+      ]);
+    };
+    const microCard = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [el("strong", { text: "Micronutrientes" }), el("span", { class: "tiny muted", text: "vs. referência diária" })]),
+      el("div", { style: "margin-top:6px" }, [
+        microRow("Fibra", got.fib, REF.fib, "g"),
+        microRow("Açúcar", got.sug, REF.sug, "g", true),
+        microRow("Gordura saturada", got.sat, REF.sat, "g", true),
+        microRow("Sódio", got.sod, REF.sod, "mg", true),
+      ]),
+    ]);
+
     view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("hoje"); }));
-    view.appendChild(el("div", { class: "stack" }, [hero, macros, actions, weekCard, diaryCard]));
+    view.appendChild(el("div", { class: "stack" }, [hero, macros, microCard, actions, weekCard, diaryCard]));
     if (nut.meals.length) {
       const qc = el("div", { class: "row wrap", style: "gap:8px;margin-top:12px" });
       nut.meals.forEach((m) => qc.appendChild(el("button", { class: "pill on", text: "+ " + m.nome, onclick: () => logMeal(m) })));
@@ -253,8 +281,7 @@
         const k = g / 100;
         Store.update(NS, (st) => {
           st.diary[viewDate] = st.diary[viewDate] || [];
-          st.diary[viewDate].push({ id: uid(), foodId: selected.id, nome: selected.nome, grams: g,
-            kcal: Math.round(selected.calorias * k), p: +(selected.proteina * k).toFixed(1), c: +(selected.hidratos * k).toFixed(1), f: +(selected.gordura * k).toFixed(1) });
+          st.diary[viewDate].push({ id: uid(), ...entryFromFood(selected, g) });
         });
         s.close(); toast("Adicionado ✓");
       }}),
@@ -308,11 +335,9 @@
     sheet("⚡ Fecho de macros", body);
   }
   function addFromSolver(c) {
-    const k = c.grams / 100;
     Store.update(NS, (st) => {
       st.diary[viewDate] = st.diary[viewDate] || [];
-      st.diary[viewDate].push({ id: uid(), foodId: c.food.id, nome: c.food.nome, grams: c.grams,
-        kcal: Math.round(c.food.calorias * k), p: +(c.food.proteina * k).toFixed(1), c: +(c.food.hidratos * k).toFixed(1), f: +(c.food.gordura * k).toFixed(1) });
+      st.diary[viewDate].push({ id: uid(), ...entryFromFood(c.food, c.grams) });
     });
     toast("Adicionado ✓");
   }
@@ -476,6 +501,10 @@
     const fp = field("Proteína /100g", { type: "number", value: f.proteina, inputmode: "decimal" });
     const fh = field("Hidratos /100g", { type: "number", value: f.hidratos, inputmode: "decimal" });
     const fg = field("Gordura /100g", { type: "number", value: f.gordura, inputmode: "decimal" });
+    const fFib = field("Fibra /100g", { type: "number", value: f.fibra != null ? f.fibra : "", inputmode: "decimal" });
+    const fSug = field("Açúcar /100g", { type: "number", value: f.acucar != null ? f.acucar : "", inputmode: "decimal" });
+    const fSat = field("Saturadas /100g", { type: "number", value: f.saturadas != null ? f.saturadas : "", inputmode: "decimal" });
+    const fSod = field("Sódio mg /100g", { type: "number", value: f.sodio != null ? f.sodio : "", inputmode: "decimal" });
     const buttons = el("div", { class: "row", style: "gap:10px" }, [
       exists ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => {
         const snap = JSON.parse(JSON.stringify(food));
@@ -484,13 +513,17 @@
       }}) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
         const data = { id: f.id || uid(), nome: fn.input.value.trim() || "Sem nome", categoria: fc.input.value.trim() || "Outros",
-          calorias: +fk.input.value || 0, proteina: +fp.input.value || 0, hidratos: +fh.input.value || 0, gordura: +fg.input.value || 0 };
+          calorias: +fk.input.value || 0, proteina: +fp.input.value || 0, hidratos: +fh.input.value || 0, gordura: +fg.input.value || 0,
+          fibra: +fFib.input.value || 0, acucar: +fSug.input.value || 0, saturadas: +fSat.input.value || 0, sodio: +fSod.input.value || 0 };
         Store.update(NS, (st) => { const i = st.foods.findIndex((x) => x.id === data.id); if (i >= 0) st.foods[i] = data; else st.foods.unshift(data); });
         s.close(); toast("Guardado ✓");
       }}),
     ]);
     const s = sheet(exists ? "Editar alimento" : "Novo alimento", [
-      fn, fc, el("div", { class: "input-row" }, [fk, fp]), el("div", { class: "input-row" }, [fh, fg]), buttons,
+      fn, fc, el("div", { class: "input-row" }, [fk, fp]), el("div", { class: "input-row" }, [fh, fg]),
+      el("details", { style: "margin-top:2px" }, [el("summary", { class: "tiny muted", style: "cursor:pointer", text: "Micronutrientes (opcional)" }),
+        el("div", { class: "input-row", style: "margin-top:8px" }, [fFib, fSug]), el("div", { class: "input-row", style: "margin-top:8px" }, [fSat, fSod])]),
+      buttons,
     ]);
   }
 
@@ -538,8 +571,8 @@
       const sel = field("Alimento", { type: "select", options: Store.get(NS).foods.map((f) => ({ value: f.id, label: f.nome })) });
       const g = field("Gramas", { type: "number", value: 100, inputmode: "decimal" });
       const s2 = sheet("Adicionar alimento", [sel, g, el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
-        const food = Store.get(NS).foods.find((f) => f.id === sel.input.value); const grams = +g.input.value || 0; const k = grams / 100;
-        m.items.push({ foodId: food.id, nome: food.nome, grams, kcal: Math.round(food.calorias * k), p: +(food.proteina * k).toFixed(1), c: +(food.hidratos * k).toFixed(1), f: +(food.gordura * k).toFixed(1) });
+        const food = Store.get(NS).foods.find((f) => f.id === sel.input.value); const grams = +g.input.value || 0;
+        m.items.push(entryFromFood(food, grams));
         s2.close(); drawItems();
       }})]);
     }});
@@ -638,7 +671,7 @@
         const search = field("Alimento", { placeholder: "Procurar…" });
         const g = field("Gramas", { type: "number", value: 100, inputmode: "decimal" });
         const res = el("div", { class: "list", style: "max-height:180px;overflow:auto" });
-        function draw() { clear(res); const q = search.input.value.toLowerCase(); nut.foods.filter((f) => f.nome.toLowerCase().includes(q)).slice(0, 20).forEach((f) => res.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => { const k = (parseFloat(g.input.value) || 100) / 100; push({ kind: "food", foodId: f.id, nome: `${f.nome} (${num(g.input.value)}g)`, grams: parseFloat(g.input.value) || 100, kcal: Math.round(f.calorias * k), p: +(f.proteina * k).toFixed(1), c: +(f.hidratos * k).toFixed(1), f: +(f.gordura * k).toFixed(1) }); } }, [el("div", { class: "grow t", text: f.nome }), el("span", { text: "+" })]))); }
+        function draw() { clear(res); const q = search.input.value.toLowerCase(); nut.foods.filter((f) => f.nome.toLowerCase().includes(q)).slice(0, 20).forEach((f) => res.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => { const grams = parseFloat(g.input.value) || 100; push({ kind: "food", ...entryFromFood(f, grams), nome: `${f.nome} (${num(grams)}g)` }); } }, [el("div", { class: "grow t", text: f.nome }), el("span", { text: "+" })]))); }
         search.input.addEventListener("input", draw); draw();
         body.appendChild(g); body.appendChild(search); body.appendChild(res);
       } else {
@@ -669,9 +702,11 @@
         const j = await r.json();
         if (j.status !== 1) { status.textContent = "Produto não encontrado. Insere manualmente."; return manualFood(code); }
         const p = j.product, n = p.nutriments || {};
+        const sodio = n["sodium_100g"] != null ? Math.round(n["sodium_100g"] * 1000) : (n["salt_100g"] != null ? Math.round(n["salt_100g"] * 400) : 0);
         const food = { id: "of_" + code, nome: p.product_name || ("Produto " + code), categoria: p.categories_tags ? "Scanner" : "Outros",
           calorias: Math.round(n["energy-kcal_100g"] || (n["energy_100g"] ? n["energy_100g"] / 4.184 : 0)),
-          proteina: +(n["proteins_100g"] || 0), hidratos: +(n["carbohydrates_100g"] || 0), gordura: +(n["fat_100g"] || 0) };
+          proteina: +(n["proteins_100g"] || 0), hidratos: +(n["carbohydrates_100g"] || 0), gordura: +(n["fat_100g"] || 0),
+          fibra: +(n["fiber_100g"] || 0), acucar: +(n["sugars_100g"] || 0), saturadas: +(n["saturated-fat_100g"] || 0), sodio };
         // guardar na base local
         Store.update(NS, (st) => { if (!st.foods.some((f) => f.id === food.id)) st.foods.unshift(food); });
         try { window.__qr && window.__qr.stop(); } catch (e) {}

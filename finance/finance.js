@@ -152,7 +152,7 @@
     ]);
 
     view.appendChild(monthNav(() => render("resumo")));
-    view.appendChild(el("div", { class: "stack" }, [hero, kpis, trendCard, cumCard, chartCard, splitCard, topCard].filter(Boolean)));
+    view.appendChild(el("div", { class: "stack" }, [hero, kpis, chartCard, splitCard, trendCard, cumCard, topCard].filter(Boolean)));
   }
 
   function kpiCard(k, v, color, arrow) { return el("div", { class: "card kpi pad-sm" }, [el("div", { class: "k", text: k }), el("div", { class: "v num", style: "color:" + color, text: (arrow ? arrow + " " : "") + v })]); }
