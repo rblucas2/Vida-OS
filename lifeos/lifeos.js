@@ -48,7 +48,7 @@
   function render(tab) {
     current = tab;
     const view = clear($("#view"));
-    ({ hoje: renderHoje, journal: renderJournal, habits: renderHabits, pillars: renderPillars, review: renderReview }[tab] || renderHoje)(view);
+    ({ hoje: renderHoje, agenda: renderAgenda, journal: renderJournal, habits: renderHabits, pillars: renderPillars, review: renderReview }[tab] || renderHoje)(view);
   }
 
   let viewDate = todayISO();
@@ -61,7 +61,6 @@
     const los = Store.get(NS);
     const day = curDay();
 
-    view.appendChild(integrationWidgets());
     view.appendChild(calHeader());
     view.appendChild(weekStrip());
 
@@ -243,6 +242,78 @@
     ]);
   }
   function go(href) { location.href = href; }
+
+  /* ----------------------------- AGENDA (Google Calendar) ----------------------------- */
+  function renderAgenda(view) {
+    $("#subtitle").textContent = "Agenda · Google Calendar";
+    view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("agenda"); }));
+
+    if (typeof GCal === "undefined" || !GCal.enabled()) {
+      view.appendChild(el("div", { class: "card empty" }, [
+        el("span", { class: "ico", text: "📅" }),
+        el("p", { text: "Liga o teu Google Calendar para veres e criares eventos — sincroniza nos dois sentidos." }),
+        el("button", { class: "btn btn-primary", text: "Configurar", onclick: App.openSettings }),
+      ]));
+      return;
+    }
+    view.appendChild(el("div", { class: "row", style: "gap:10px" }, [
+      el("button", { class: "btn btn-primary btn-block", text: "+ Novo evento", onclick: newEvent }),
+      el("button", { class: "btn btn-soft", text: "↻", title: "Atualizar", onclick: () => render("agenda") }),
+    ]));
+    const card = el("div", { class: "card" }, [el("div", { class: "empty tiny", text: "A carregar eventos…" })]);
+    view.appendChild(card);
+    loadAgenda(card);
+  }
+  async function loadAgenda(card) {
+    try {
+      if (!GCal.connected()) {
+        clear(card).appendChild(el("div", { class: "empty" }, [
+          el("p", { text: "Autoriza o acesso ao teu Google Calendar." }),
+          el("button", { class: "btn btn-primary", text: "Ligar Google Calendar", onclick: async () => { try { await GCal.connect(true); render("agenda"); } catch (e) { toast(e.message); } } }),
+        ]));
+        return;
+      }
+      const tMin = new Date(viewDate + "T00:00:00").toISOString();
+      const tMax = new Date(viewDate + "T23:59:59").toISOString();
+      const events = await GCal.listEvents(tMin, tMax);
+      clear(card);
+      card.appendChild(el("div", { class: "row between" }, [el("strong", { text: "Eventos" }), el("span", { class: "tiny muted", text: events.length + (events.length === 1 ? " evento" : " eventos") })]));
+      if (!events.length) card.appendChild(el("div", { class: "empty tiny", text: "Sem eventos neste dia. Toca em '+ Novo evento'." }));
+      else {
+        const list = el("div", { class: "list" });
+        events.forEach((ev) => {
+          const s = ev.start && ev.start.dateTime ? new Date(ev.start.dateTime) : null;
+          const tm = s ? String(s.getHours()).padStart(2, "0") + ":" + String(s.getMinutes()).padStart(2, "0") : "Dia inteiro";
+          list.appendChild(el("div", { class: "item" }, [
+            el("div", { style: "font-family:var(--mono);font-size:.72rem;color:var(--text-soft);min-width:52px", text: tm }),
+            el("div", { class: "grow t", text: ev.summary || "(sem título)" }),
+            el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: async () => { if (await UI.confirm("Apagar este evento do Google Calendar?", { danger: true })) { try { await GCal.deleteEvent(ev.id); render("agenda"); } catch (e) { toast(e.message); } } } }),
+          ]));
+        });
+        card.appendChild(list);
+      }
+    } catch (e) { clear(card).appendChild(el("div", { class: "empty tiny", style: "color:var(--bad)", text: "Erro: " + e.message })); }
+  }
+  function newEvent() {
+    const fT = field("Título", { placeholder: "ex: Reunião, Treino, Consulta…" });
+    const fAll = el("input", { type: "checkbox" });
+    const fDate = field("Data", { type: "date", value: viewDate });
+    const fS = field("Início", { type: "time", value: "09:00" });
+    const fE = field("Fim", { type: "time", value: "10:00" });
+    const sh = sheet("Novo evento", [
+      fT, el("label", { class: "row", style: "gap:8px" }, [fAll, el("span", { text: "Dia inteiro" })]),
+      fDate, el("div", { class: "input-row" }, [fS, fE]),
+      el("button", { class: "btn btn-primary btn-block", text: "Criar no Google Calendar", onclick: async () => {
+        const title = fT.input.value.trim(); if (!title) return toast("Indica o título.");
+        const date = fDate.input.value;
+        try {
+          if (fAll.checked) { const next = new Date(date + "T00:00:00"); next.setDate(next.getDate() + 1); await GCal.createEvent({ summary: title, allDay: true, start: date, end: isoDate(next) }); }
+          else { await GCal.createEvent({ summary: title, start: new Date(date + "T" + fS.input.value + ":00").toISOString(), end: new Date(date + "T" + fE.input.value + ":00").toISOString() }); }
+          sh.close(); toast("Evento criado ✓"); viewDate = date; render("agenda");
+        } catch (e) { toast("Falha: " + e.message, 4000); }
+      }}),
+    ]);
+  }
 
   /* ----------------------------- DIÁRIO ----------------------------- */
   const MOODS = ["😔", "😕", "😐", "🙂", "😄"];

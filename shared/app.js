@@ -116,6 +116,39 @@
     const gymField = el("label", { class: "field" }, [el("span", { text: "URL da app de Ginásio (gymos)" }), fGym,
       el("div", { class: "tiny muted", style: "margin-top:6px", html: Domain.gymConnected() ? "✓ Ligada — treinos detetados neste dispositivo." : "Para ler os treinos, publica esta suite na mesma conta GitHub (mesma origem que o gymos)." })]);
 
+    // Google Calendar
+    const gc = Store.get("sys").gcal || {};
+    const fCid = el("input", { type: "text", value: gc.clientId || "", placeholder: "…apps.googleusercontent.com" });
+    const fCal = el("input", { type: "text", value: gc.calendarId || "primary", placeholder: "primary" });
+    const gcState = el("span", { class: "pill" });
+    const refreshGc = () => { const c = (typeof GCal !== "undefined") && GCal.connected(); gcState.innerHTML = `<span class="dot" style="background:${c ? "var(--good)" : "var(--text-mute)"}"></span>${c ? "Ligado ✓" : (fCid.value.trim() ? "Configurado" : "Desligado")}`; };
+    if (typeof GCal !== "undefined") GCal.onChange(refreshGc);
+    const gcSave = el("button", { class: "btn btn-block", text: "Guardar Client ID", onclick: () => { Store.update("sys", (s) => { s.gcal = { clientId: fCid.value.trim(), calendarId: fCal.value.trim() || "primary" }; }); toast("Guardado ✓"); refreshGc(); } });
+    const gcConnect = el("button", { class: "btn btn-primary btn-block", text: "Ligar Google Calendar", onclick: async () => {
+      if (!fCid.value.trim()) return toast("Cola o Client ID e guarda primeiro.");
+      Store.update("sys", (s) => { s.gcal = { clientId: fCid.value.trim(), calendarId: fCal.value.trim() || "primary" }; });
+      try { await GCal.connect(true); toast("Google Calendar ligado ✓"); } catch (e) { toast("Falha: " + e.message, 4500); }
+    }});
+    const gcHelp = el("details", { class: "card", style: "margin-top:4px" }, [
+      el("summary", { style: "cursor:pointer;font-weight:600", text: "Como ligar o Google Calendar (1x, ~5 min)" }),
+      el("ol", { class: "muted tiny", style: "line-height:1.7;padding-left:18px" }, [
+        el("li", { html: 'Abre <a class="link" href="https://console.cloud.google.com/" target="_blank">console.cloud.google.com</a> e cria um projeto (grátis).' }),
+        el("li", { text: "APIs & Services → Library → ativa 'Google Calendar API'." }),
+        el("li", { text: "OAuth consent screen → External → preenche o nome e adiciona-te em 'Test users'." }),
+        el("li", { text: "Credentials → Create credentials → OAuth client ID → tipo 'Web application'." }),
+        el("li", { html: 'Em "Authorized JavaScript origins" adiciona exatamente: <b>' + location.origin + '</b>' }),
+        el("li", { text: "Copia o 'Client ID' (…apps.googleusercontent.com), cola acima, Guardar → Ligar." }),
+      ]),
+    ]);
+    const gcalField = el("div", {}, [
+      el("div", { class: "row" }, [el("span", { class: "tiny muted", text: "Estado:" }), gcState]),
+      el("label", { class: "field", style: "margin-top:8px" }, [el("span", { text: "Client ID do Google" }), fCid]),
+      el("label", { class: "field", style: "margin-top:8px" }, [el("span", { text: "Calendário (id ou 'primary')" }), fCal]),
+      el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [gcSave, gcConnect]),
+      gcHelp,
+    ]);
+    setTimeout(refreshGc, 0);
+
     const exportBtn = el("button", { class: "btn btn-block", text: "Exportar cópia de segurança (.json)", onclick: () => {
       const blob = new Blob([JSON.stringify(Store.exportAll(), null, 2)], { type: "application/json" });
       const a = el("a", { href: URL.createObjectURL(blob), download: `vidaos-backup-${UI.todayISO()}.json` }); a.click();
@@ -131,7 +164,8 @@
     UI.sheet("Definições", [
       el("div", { class: "section-title", style: "margin-top:4px", text: "Aparência" }), themeSel,
       el("button", { class: "btn btn-soft btn-block", text: "Instalar app no dispositivo", onclick: promptInstall }),
-      el("div", { class: "section-title", text: "Integração" }), gymField,
+      el("div", { class: "section-title", text: "Integração · Ginásio" }), gymField,
+      el("div", { class: "section-title", text: "Integração · Google Calendar" }), gcalField,
       el("div", { class: "section-title", text: "Sincronização telemóvel ↔ PC" }),
       el("div", { class: "row" }, [el("span", { class: "muted tiny", text: "Estado:" }), syncState]),
       fUrl, fKey, fCode, saveSync, syncNow, help,
