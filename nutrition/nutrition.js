@@ -2,7 +2,7 @@
    Nutrição & Macros
    ===================================================================== */
 (function () {
-  const { el, $, clear, num, toast, undo, sheet, field, bar, ring, uid, todayISO } = UI;
+  const { el, $, clear, num, toast, undo, sheet, field, bar, ring, donut, uid, todayISO } = UI;
   const D = Domain;
   const NS = "nut";
 
@@ -123,12 +123,24 @@
         el("div", { style: "font-size:.62rem;color:var(--text-mute);margin-top:4px", text: num(g) + " / " + num(tgt) + "g" }),
       ]);
     };
+    const dParts = [
+      { label: "Proteína", value: got.p * 4, color: "var(--good)" },
+      { label: "Hidratos", value: got.c * 4, color: "#3b82f6" },
+      { label: "Gordura", value: got.f * 9, color: "var(--warn)" },
+    ];
     const macros = el("div", { class: "card" }, [
-      el("div", { class: "row between" }, [el("strong", { text: "Macros por atingir" }), el("span", { class: "tiny muted", text: "meta − consumido" })]),
-      el("div", { class: "macros3", style: "margin-top:12px" }, [
-        macroCol("Proteína", "var(--good)", got.p, targets.protein),
-        macroCol("Hidratos", "#3b82f6", got.c, targets.carbs),
-        macroCol("Gordura", "var(--warn)", got.f, targets.fat),
+      el("div", { class: "row between" }, [el("strong", { text: "Macros" }), el("span", { class: "tiny muted", text: "restante · distribuição" })]),
+      el("div", { class: "row", style: "gap:14px;margin-top:12px;align-items:center;flex-wrap:wrap" }, [
+        el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
+          donut(dParts, { size: 116, stroke: 18 }),
+          el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
+            el("div", { class: "num", style: "font-weight:800", text: num(got.kcal) }), el("div", { class: "tiny muted", style: "font-size:.6rem", text: "kcal" })]),
+        ]),
+        el("div", { class: "macros3", style: "flex:1;min-width:190px" }, [
+          macroCol("Proteína", "var(--good)", got.p, targets.protein),
+          macroCol("Hidratos", "#3b82f6", got.c, targets.carbs),
+          macroCol("Gordura", "var(--warn)", got.f, targets.fat),
+        ]),
       ]),
     ]);
 
