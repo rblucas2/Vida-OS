@@ -73,132 +73,76 @@
     const nut = Store.get(NS), los = Store.get("los");
     const targets = D.effectiveTargets(nut, los, viewDate);
     $("#subtitle").textContent = new Date(viewDate + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
-
-    if (!targets) {
-      view.appendChild(el("div", { class: "card empty" }, [
-        el("span", { class: "ico", text: "🎯" }),
-        el("p", { text: "Define as tuas metas diárias para começares a registar." }),
-        el("div", { class: "row", style: "gap:10px;justify-content:center" }, [
-          el("button", { class: "btn btn-primary", text: "Definir metas", onclick: () => setManualTargets() }),
-          el("button", { class: "btn btn-soft", text: "Calcular (perfil)", onclick: () => switchTab("calc") }),
-        ]),
-      ]));
-      return;
-    }
-
     const got = D.dayIntake(nut, viewDate);
-    const left = Math.round(targets.kcal - got.kcal);
-    const kcalPct = targets.kcal ? (got.kcal / targets.kcal) * 100 : 0;
+    const REF = D.MICRO_REF;
+    const cards = [];
 
-    // HERO — contador de calorias (Objetivo − Consumido = Restante), estilo MyFitnessPal
-    const cell = (k, v) => el("div", { style: "text-align:center;flex:1" }, [
-      el("div", { style: "font-family:var(--font-num);font-weight:800;font-size:1.25rem", text: v }),
-      el("div", { style: "font-size:.66rem;opacity:.85;text-transform:uppercase;letter-spacing:.04em", text: k }),
-    ]);
-    const ringMini = ring(Math.min(100, kcalPct), { size: 118, stroke: 11, label: String(Math.abs(left)), sub: left >= 0 ? "restam" : "a mais", color: "#fff" });
-    ringMini.querySelectorAll("text").forEach((t) => t.setAttribute("fill", "#fff"));
-    const hero = el("div", { class: "hero" }, [
-      el("div", { class: "row", style: "align-items:center;gap:16px" }, [
-        el("div", { style: "flex:none" }, [ringMini]),
-        el("div", { style: "flex:1" }, [
-          el("div", { class: "label", text: "Calorias de hoje" + (targets.boosted ? " · +12% treino 💪" : "") }),
-          el("div", { class: "row", style: "margin-top:8px;gap:4px" }, [
-            cell("Objetivo", num(targets.kcal)), el("div", { style: "opacity:.7;font-size:1.1rem", text: "−" }),
-            cell("Consumido", num(got.kcal)), el("div", { style: "opacity:.7;font-size:1.1rem", text: "=" }),
-            cell("Restante", num(left)),
+    if (targets) {
+      // HERO — contador de calorias (Objetivo − Consumido = Restante)
+      const left = Math.round(targets.kcal - got.kcal);
+      const kcalPct = targets.kcal ? (got.kcal / targets.kcal) * 100 : 0;
+      const cell = (k, v) => el("div", { style: "text-align:center;flex:1" }, [
+        el("div", { style: "font-family:var(--font-num);font-weight:800;font-size:1.25rem", text: v }),
+        el("div", { style: "font-size:.66rem;opacity:.85;text-transform:uppercase;letter-spacing:.04em", text: k }),
+      ]);
+      const ringMini = ring(Math.min(100, kcalPct), { size: 118, stroke: 11, label: String(Math.abs(left)), sub: left >= 0 ? "restam" : "a mais", color: "#fff" });
+      ringMini.querySelectorAll("text").forEach((t) => t.setAttribute("fill", "#fff"));
+      cards.push(el("div", { class: "hero" }, [
+        el("div", { class: "row", style: "align-items:center;gap:16px" }, [
+          el("div", { style: "flex:none" }, [ringMini]),
+          el("div", { style: "flex:1" }, [
+            el("div", { class: "label", text: "Calorias de hoje" + (targets.boosted ? " · +12% treino 💪" : "") }),
+            el("div", { class: "row", style: "margin-top:8px;gap:4px" }, [
+              cell("Objetivo", num(targets.kcal)), el("div", { style: "opacity:.7;font-size:1.1rem", text: "−" }),
+              cell("Consumido", num(got.kcal)), el("div", { style: "opacity:.7;font-size:1.1rem", text: "=" }),
+              cell("Restante", num(left)),
+            ]),
           ]),
         ]),
-      ]),
-    ]);
+      ]));
 
-    // Macros RESTANTES — descontam à medida que registas (estilo MyFitnessPal)
-    const macroCol = (label, color, g, tgt) => {
-      const rem = Math.round(tgt - g);
-      const pct = tgt ? Math.min(100, (g / tgt) * 100) : 0;
-      return el("div", { class: "macro" }, [
-        el("div", { class: "mk", text: label }),
-        el("div", { class: "mv", style: "color:" + (rem < 0 ? "var(--bad)" : color), text: num(Math.abs(rem)) + "g" }),
-        el("div", { style: "font-size:.6rem;color:var(--text-mute);margin-top:-2px", text: rem >= 0 ? "restam" : "a mais" }),
-        el("div", { class: "mbar", style: "margin-top:5px" }, [el("i", { style: `width:${pct}%;background:${rem < 0 ? "var(--bad)" : color}` })]),
-        el("div", { style: "font-size:.62rem;color:var(--text-mute);margin-top:4px", text: num(g) + " / " + num(tgt) + "g" }),
-      ]);
-    };
-    const dParts = [
-      { label: "Proteína", value: got.p * 4, color: "var(--good)" },
-      { label: "Hidratos", value: got.c * 4, color: "#3b82f6" },
-      { label: "Gordura", value: got.f * 9, color: "var(--warn)" },
-    ];
-    const macros = el("div", { class: "card" }, [
-      el("div", { class: "row between" }, [el("strong", { text: "Macros" }), el("span", { class: "tiny muted", text: "restante · distribuição" })]),
-      el("div", { class: "row", style: "gap:14px;margin-top:12px;align-items:center;flex-wrap:wrap" }, [
-        el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
-          donut(dParts, { size: 116, stroke: 18 }),
-          el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
-            el("div", { class: "num", style: "font-weight:800", text: num(got.kcal) }), el("div", { class: "tiny muted", style: "font-size:.6rem", text: "kcal" })]),
-        ]),
-        el("div", { class: "legend", style: "flex:1;min-width:160px" }, dParts.map((p) => {
-          const sum = dParts.reduce((a, b) => a + b.value, 0) || 1;
-          return el("div", { class: "lg" }, [
+      // Macros donut
+      const dParts = [
+        { label: "Proteína", value: got.p * 4, color: "var(--good)" },
+        { label: "Hidratos", value: got.c * 4, color: "#3b82f6" },
+        { label: "Gordura", value: got.f * 9, color: "var(--warn)" },
+      ];
+      const sum = dParts.reduce((a, b) => a + b.value, 0) || 1;
+      cards.push(el("div", { class: "card" }, [
+        el("div", { class: "row between" }, [el("strong", { text: "Macros" }), el("span", { class: "tiny muted", text: "distribuição das calorias" })]),
+        el("div", { class: "row", style: "gap:14px;margin-top:12px;align-items:center;flex-wrap:wrap" }, [
+          el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
+            donut(dParts, { size: 116, stroke: 18 }),
+            el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
+              el("div", { class: "num", style: "font-weight:800", text: num(got.kcal) }), el("div", { class: "tiny muted", style: "font-size:.6rem", text: "kcal" })]),
+          ]),
+          el("div", { class: "legend", style: "flex:1;min-width:160px" }, dParts.map((p) => el("div", { class: "lg" }, [
             el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
             el("span", { class: "vl tiny", text: Math.round(p.value / sum * 100) + "% das kcal" }),
-          ]);
-        })),
-      ]),
-    ]);
-
-    // Ações
-    const trained = D.workoutDone(nut, los, viewDate);
-    const fromGym = D.gymWorkoutDone(viewDate);
-    const trainBtn = el("button", { class: "btn btn-block " + (trained ? "btn-soft" : ""), disabled: fromGym, title: fromGym ? "Treino registado na app de Ginásio" : "", html: (trained ? "✓ " : "") + (fromGym ? "Treino (Ginásio) 💪" : "Treino concluído"), onclick: () => {
-      Store.update(NS, (s) => { s.workoutDays = s.workoutDays || {}; if (s.workoutDays[viewDate]) delete s.workoutDays[viewDate]; else s.workoutDays[viewDate] = true; });
-    }});
-    const actions = el("div", { class: "grid-2" }, [
-      el("button", { class: "btn btn-soft btn-block", html: "⚡ Fechar macros", onclick: macroSolver }), trainBtn,
-    ]);
-
-    // Gráfico últimos 7 dias (kcal vs objetivo)
-    const week = [];
-    for (let i = 6; i >= 0; i--) { const d = new Date(viewDate + "T00:00:00"); d.setDate(d.getDate() - i); const iso = UI.isoDate(d); week.push({ iso, kcal: D.dayIntake(nut, iso).kcal, wd: UI.DAYS[d.getDay()] }); }
-    const wkMax = Math.max(targets.kcal, ...week.map((w) => w.kcal), 1);
-    const wkBars = el("div", { class: "row", style: "align-items:flex-end;gap:7px;height:96px;margin-top:12px;position:relative" });
-    week.forEach((w) => {
-      const h = Math.max(3, (w.kcal / wkMax) * 82);
-      const over = w.kcal > targets.kcal * 1.05;
-      wkBars.appendChild(el("div", { style: "flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end" }, [
-        el("div", { style: `width:100%;max-width:26px;height:${h}px;border-radius:5px;background:${over ? "var(--bad)" : "var(--accent-grad)"};opacity:${w.iso === viewDate ? 1 : .6}` }),
-        el("div", { class: "tiny muted", style: "font-size:.6rem", text: w.wd }),
+          ]))),
+        ]),
       ]));
-    });
-    const goalPct = Math.min(98, (targets.kcal / wkMax) * 82 / 96 * 100 + 14);
-    const weekCard = el("div", { class: "card" }, [
-      el("div", { class: "row between" }, [el("strong", { text: "Últimos 7 dias" }), el("span", { class: "tiny muted", text: "objetivo " + num(targets.kcal) + " kcal" })]),
-      wkBars,
-    ]);
-
-    // Diário
-    const items = (nut.diary[viewDate] || []);
-    const diaryCard = el("div", { class: "card" }, [
-      el("div", { class: "row", style: "justify-content:space-between;margin-bottom:6px" }, [
-        el("strong", { text: "Diário" }),
-        el("span", { class: "tiny muted", text: items.length + " itens" }),
-      ]),
-    ]);
-    if (!items.length) diaryCard.appendChild(el("div", { class: "empty", text: "Ainda não registaste nada. Toca em + para adicionar." }));
-    else {
-      const list = el("div", { class: "list" });
-      items.forEach((it) => {
-        list.appendChild(el("div", { class: "item" }, [
-          el("div", { class: "grow" }, [el("div", { class: "t", text: it.nome }), el("div", { class: "s", text: `${num(it.grams)} g · ${num(it.p)}P ${num(it.c)}C ${num(it.f)}G` })]),
-          el("div", { class: "amt", text: num(it.kcal) + " kcal" }),
-          el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => removeDiary(it.id) }),
-        ]));
-      });
-      diaryCard.appendChild(list);
+    } else {
+      cards.push(el("div", { class: "card" }, [
+        el("div", { class: "row between" }, [el("strong", { text: "Metas por definir" }), el("span", { class: "pill", text: "⚠ sem metas" })]),
+        el("p", { class: "tiny muted", style: "margin:6px 0 10px", text: "Mostro o que já consumiste hoje. Define metas para veres quanto falta a cada nutriente." }),
+        el("div", { class: "row", style: "gap:10px" }, [
+          el("button", { class: "btn btn-primary btn-block", text: "Definir metas", onclick: setManualTargets }),
+          el("button", { class: "btn btn-soft btn-block", text: "Calcular (perfil)", onclick: () => switchTab("calc") }),
+        ]),
+      ]));
     }
 
-    // RESUMO DO DIA — macros + micros, com indicação de acima/abaixo da meta
-    const REF = D.MICRO_REF;
+    // RESUMO DO DIA — macros + micros (SEMPRE visível, com ou sem metas)
     const nutrientRow = (label, val, tgt, unit, kind) => {
+      if (tgt == null) {
+        return el("div", { style: "padding:10px 0;border-bottom:1px solid var(--border)" }, [
+          el("div", { class: "row between" }, [
+            el("span", { style: "font-weight:600;font-size:.92rem", text: label }),
+            el("span", { class: "tiny num muted", text: num(val) + unit + " consumido" }),
+          ]),
+        ]);
+      }
       const pct = tgt ? Math.min(100, (val / tgt) * 100) : 0;
       let status, color;
       if (kind === "limit") {
@@ -221,28 +165,74 @@
         b,
       ]);
     };
-    const summaryCard = el("div", { class: "card" }, [
+    cards.push(el("div", { class: "card" }, [
       el("div", { class: "row between" }, [el("strong", { text: "Resumo do dia" }), el("span", { class: "tiny muted", text: "macros e micros" })]),
       el("div", { style: "margin-top:8px" }, [
-        nutrientRow("Calorias", got.kcal, targets.kcal, " kcal", "goal"),
-        nutrientRow("Proteína", got.p, targets.protein, "g", "goal"),
-        nutrientRow("Hidratos de carbono", got.c, targets.carbs, "g", "goal"),
-        nutrientRow("Gordura", got.f, targets.fat, "g", "goal"),
+        nutrientRow("Calorias", got.kcal, targets ? targets.kcal : null, " kcal", "goal"),
+        nutrientRow("Proteína", got.p, targets ? targets.protein : null, "g", "goal"),
+        nutrientRow("Hidratos de carbono", got.c, targets ? targets.carbs : null, "g", "goal"),
+        nutrientRow("Gordura", got.f, targets ? targets.fat : null, "g", "goal"),
         nutrientRow("Fibra", got.fib, REF.fib, "g", "goal"),
         nutrientRow("Açúcar", got.sug, REF.sug, "g", "limit"),
         nutrientRow("Gordura saturada", got.sat, REF.sat, "g", "limit"),
         nutrientRow("Sódio", got.sod, REF.sod, "mg", "limit"),
       ]),
+    ]));
+
+    if (targets) {
+      // Ações
+      const trained = D.workoutDone(nut, los, viewDate);
+      const fromGym = D.gymWorkoutDone(viewDate);
+      const trainBtn = el("button", { class: "btn btn-block " + (trained ? "btn-soft" : ""), disabled: fromGym, title: fromGym ? "Treino registado na app de Ginásio" : "", html: (trained ? "✓ " : "") + (fromGym ? "Treino (Ginásio) 💪" : "Treino concluído"), onclick: () => {
+        Store.update(NS, (s) => { s.workoutDays = s.workoutDays || {}; if (s.workoutDays[viewDate]) delete s.workoutDays[viewDate]; else s.workoutDays[viewDate] = true; });
+      }});
+      cards.push(el("div", { class: "grid-2" }, [el("button", { class: "btn btn-soft btn-block", html: "⚡ Fechar macros", onclick: macroSolver }), trainBtn]));
+
+      // Gráfico últimos 7 dias
+      const week = [];
+      for (let i = 6; i >= 0; i--) { const d = new Date(viewDate + "T00:00:00"); d.setDate(d.getDate() - i); const iso = UI.isoDate(d); week.push({ iso, kcal: D.dayIntake(nut, iso).kcal, wd: UI.DAYS[d.getDay()] }); }
+      const wkMax = Math.max(targets.kcal, ...week.map((w) => w.kcal), 1);
+      const wkBars = el("div", { class: "row", style: "align-items:flex-end;gap:7px;height:96px;margin-top:12px" });
+      week.forEach((w) => {
+        const h = Math.max(3, (w.kcal / wkMax) * 82);
+        const over = w.kcal > targets.kcal * 1.05;
+        wkBars.appendChild(el("div", { style: "flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end" }, [
+          el("div", { style: `width:100%;max-width:26px;height:${h}px;border-radius:5px;background:${over ? "var(--bad)" : "var(--accent-grad)"};opacity:${w.iso === viewDate ? 1 : .6}` }),
+          el("div", { class: "tiny muted", style: "font-size:.6rem", text: w.wd }),
+        ]));
+      });
+      cards.push(el("div", { class: "card" }, [
+        el("div", { class: "row between" }, [el("strong", { text: "Últimos 7 dias" }), el("span", { class: "tiny muted", text: "objetivo " + num(targets.kcal) + " kcal" })]),
+        wkBars,
+      ]));
+    }
+
+    // Diário — SEMPRE
+    const items = (nut.diary[viewDate] || []);
+    const diaryCard = el("div", { class: "card" }, [
+      el("div", { class: "row", style: "justify-content:space-between;margin-bottom:6px" }, [
+        el("strong", { text: "Diário" }), el("span", { class: "tiny muted", text: items.length + " itens" }),
+      ]),
     ]);
+    if (!items.length) diaryCard.appendChild(el("div", { class: "empty", text: "Ainda não registaste nada. Toca em + para adicionar." }));
+    else {
+      const list = el("div", { class: "list" });
+      items.forEach((it) => list.appendChild(el("div", { class: "item" }, [
+        el("div", { class: "grow" }, [el("div", { class: "t", text: it.nome }), el("div", { class: "s", text: `${num(it.grams)} g · ${num(it.p)}P ${num(it.c)}C ${num(it.f)}G` })]),
+        el("div", { class: "amt", text: num(it.kcal) + " kcal" }),
+        el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => removeDiary(it.id) }),
+      ])));
+      diaryCard.appendChild(list);
+    }
+    cards.push(diaryCard);
 
     view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("hoje"); }));
-    view.appendChild(el("div", { class: "stack" }, [hero, macros, summaryCard, actions, weekCard, diaryCard]));
+    view.appendChild(el("div", { class: "stack" }, cards));
     if (nut.meals.length) {
       const qc = el("div", { class: "row wrap", style: "gap:8px;margin-top:12px" });
       nut.meals.forEach((m) => qc.appendChild(el("button", { class: "pill on", text: "+ " + m.nome, onclick: () => logMeal(m) })));
       view.appendChild(el("div", {}, [el("div", { class: "section-title", text: "Refeições rápidas" }), qc]));
     }
-
     view.appendChild(fab(() => addFoodSheet()));
   }
 

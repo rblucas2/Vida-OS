@@ -122,7 +122,7 @@
         el("span", { class: "vl tiny", text: eur0(p.value) + " · " + Math.round(p.value / s.expense * 100) + "%" }),
       ])));
       chartCard = el("div", { class: "card" }, [
-        el("strong", { text: "Para onde foi o dinheiro" }),
+        el("strong", { text: "Despesas por categoria" }),
         el("div", { class: "row", style: "gap:18px;margin-top:14px;align-items:center" }, [
           el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
             donut(parts, { size: 132 }),
@@ -131,7 +131,7 @@
           ]), legend,
         ]),
       ]);
-    } else chartCard = el("div", { class: "card empty", html: '<span class="ico">📊</span>Sem despesas neste mês. Importa um CSV ou adiciona transações.' });
+    } else chartCard = el("div", { class: "card" }, [el("strong", { text: "Despesas por categoria" }), el("div", { class: "empty tiny", html: '<span class="ico">🥧</span>Sem despesas neste mês. Adiciona movimentos, importa um CSV, ou muda de mês com ‹ ›.' })]);
 
     // Top despesas
     const tx = D.txInMonth(fin.transactions, viewMonth).filter((t) => t.type === "expense").sort((a, b) => b.amount - a.amount).slice(0, 5);
