@@ -10,7 +10,8 @@
 
   function init() {
     App.boot({ active: "finance" });
-    Store.ensure(NS, { transactions: [], budgets: {}, assets: [], categoryRules: {}, nwHistory: {}, recurring: [] });
+    Store.ensure(NS, { transactions: [], budgets: {}, assets: [], categoryRules: {}, nwHistory: {}, recurring: [], sources: [], categories: [] });
+    seedFinance();
     applyRecurring();
     App.onboard("finance", "Finanças", [
       "⇪ Importa o <b>CSV do banco</b> — categorias automáticas que aprendem com as tuas correções.",
@@ -33,7 +34,7 @@
   function render(tab) {
     current = tab;
     const view = clear($("#view"));
-    ({ resumo: renderResumo, tx: renderTx, budgets: renderBudgets, net: renderNet }[tab] || renderResumo)(view);
+    ({ resumo: renderResumo, tx: renderTx, budgets: renderBudgets, savings: renderSavings, net: renderNet }[tab] || renderResumo)(view);
   }
 
   function monthNav(onChange) {
@@ -68,7 +69,7 @@
 
   function renderResumo(view) {
     const fin = Store.get(NS);
-    const s = D.financeSummary(fin, viewMonth);
+    const s = D.financeSummary(fin, viewMonth, essentialSet());
     $("#subtitle").textContent = "Visão geral";
 
     // HERO — Dinheiro livre
@@ -140,7 +141,7 @@
 
     // Essenciais vs estilo de vida
     let ess = 0, life = 0;
-    Object.entries(s.byCat).forEach(([c, v]) => { if (D.isEssential(c)) ess += v; else life += v; });
+    Object.entries(s.byCat).forEach(([c, v]) => { if (catGroup(c) === "essential") ess += v; else life += v; });
     const tot = ess + life || 1;
     const splitCard = el("div", { class: "card" }, [
       el("strong", { text: "Essenciais vs. Estilo de vida" }),
@@ -182,18 +183,23 @@
         el("button", { class: "btn btn-soft btn-block", html: "⇪ Importar CSV", onclick: () => importInput.click() }),
         el("button", { class: "btn btn-primary btn-block", text: "+ Manual", onclick: () => editTx(null) }),
       ]),
-      el("button", { class: "btn btn-ghost btn-block btn-sm", html: "↻ Gerir movimentos recorrentes", onclick: manageRecurring }),
+      el("div", { class: "row", style: "gap:10px" }, [
+        el("button", { class: "btn btn-ghost btn-block btn-sm", html: "↻ Recorrentes", onclick: manageRecurring }),
+        el("button", { class: "btn btn-ghost btn-block btn-sm", html: "🏷️ Categorias", onclick: manageCategories }),
+        el("button", { class: "btn btn-ghost btn-block btn-sm", html: "💳 Fontes", onclick: manageSources }),
+      ]),
       importInput, search, list,
     ]));
   }
 
   function txRow(t, editable) {
-    const sign = t.type === "income" ? "+" : "−";
-    const color = t.type === "income" ? "var(--good)" : "var(--text)";
+    const sign = t.type === "income" ? "+" : t.type === "transfer" ? "↔" : "−";
+    const color = t.type === "income" ? "var(--good)" : t.type === "transfer" ? "var(--text-mute)" : "var(--text)";
+    const src = t.account ? " · " + t.account : "";
     const row = el("div", { class: "item" }, [
       el("div", { class: "grow", style: editable ? "cursor:pointer" : "", onclick: editable ? () => editTx(t) : null }, [
         el("div", { class: "t", text: t.desc || "(sem descrição)" }),
-        el("div", { class: "s", html: `<span class="pill" style="padding:1px 8px">${t.category || "Outros"}</span> &nbsp;${UI.prettyDate(t.date)}${t.manual ? " · manual" : ""}` }),
+        el("div", { class: "s", html: `<span class="pill" style="padding:1px 8px">${t.category || "Outros"}</span> &nbsp;${UI.prettyDate(t.date)}${src}` }),
       ]),
       el("div", { class: "amt", style: "color:" + color, text: sign + eur(t.amount).replace("€", "") + "€" }),
     ]);
@@ -203,27 +209,35 @@
   function editTx(t) {
     const fin = Store.get(NS);
     const isNew = !t;
-    t = t || { id: uid(), date: todayISO(), desc: "", amount: "", category: "Outros", type: "expense", account: "Manual", manual: true };
-    const cats = uniqueCats();
-    const fType = field("Tipo", { type: "select", value: t.type, options: [{ value: "expense", label: "Despesa" }, { value: "income", label: "Receita" }] });
+    t = t || { id: uid(), date: todayISO(), desc: "", amount: "", category: "Outros", type: "expense", account: sourceNames()[0] || "Dinheiro", manual: true };
+    const fType = field("Tipo", { type: "select", value: t.type, options: [{ value: "expense", label: "Despesa" }, { value: "income", label: "Receita" }, { value: "transfer", label: "Transferência (ignorada nos totais)" }] });
     const fAmount = field("Valor (€)", { type: "number", value: t.amount, inputmode: "decimal", step: "0.01" });
     const fDate = field("Data", { type: "date", value: t.date });
     const fDesc = field("Descrição", { value: t.desc, placeholder: "ex: Almoço, Ordenado…" });
     const fCat = field("Categoria", { value: t.category, list: "catlist" });
-    const dl = el("datalist", { id: "catlist" }, cats.map((c) => el("option", { value: c })));
-    const fAcc = field("Conta / método", { value: t.account || "Manual", placeholder: "Banco, Dinheiro, MBWay…" });
+    const dl = el("datalist", { id: "catlist" }, catNames().map((c) => el("option", { value: c })));
+    const fAcc = field("Fonte de pagamento", { value: t.account || "", list: "srclist", placeholder: "Dinheiro, Cartão…" });
+    const dlS = el("datalist", { id: "srclist" }, sourceNames().map((c) => el("option", { value: c })));
     fDesc.input.addEventListener("blur", () => { if (!fCat.input.value || fCat.input.value === "Outros") fCat.input.value = D.categorize(fDesc.input.value, fin.categoryRules); });
 
+    const catRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fCat]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir categorias", onclick: () => manageCategories() })]);
+    const srcRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fAcc]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir fontes", onclick: () => manageSources() })]);
+
     const body = [
-      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, fCat, dl, fAcc,
+      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, dl, srcRow, dlS,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(t)); Store.update(NS, (s) => { s.transactions = s.transactions.filter((x) => x.id !== t.id); }); sh.close(); undo("Transação apagada", () => Store.update(NS, (s) => { s.transactions.push(snap); })); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
           const data = { ...t, date: fDate.input.value, desc: fDesc.input.value.trim(), amount: Math.abs(parseFloat(fAmount.input.value) || 0),
-            category: fCat.input.value.trim() || "Outros", type: fType.input.value, account: fAcc.input.value.trim() || "Manual", manual: t.manual !== false };
+            category: fCat.input.value.trim() || "Outros", type: fType.input.value, account: fAcc.input.value.trim() || "Dinheiro", manual: t.manual !== false };
           if (!data.amount) return toast("Indica um valor.");
-          Store.update(NS, (s) => { const i = s.transactions.findIndex((x) => x.id === data.id); if (i >= 0) s.transactions[i] = data; else { data._c = Date.now(); s.transactions.push(data); } });
-          learnRule(data.desc, data.category);   // aprende a categoria desta descrição
+          Store.update(NS, (s) => {
+            const i = s.transactions.findIndex((x) => x.id === data.id); if (i >= 0) s.transactions[i] = data; else { data._c = Date.now(); s.transactions.push(data); }
+            // auto-regista categoria / fonte novas
+            if (data.category && !s.categories.some((c) => c.name === data.category)) s.categories.push({ name: data.category, group: data.type === "income" ? "income" : "lifestyle" });
+            if (data.account && !s.sources.some((x) => x.name === data.account)) s.sources.push({ id: uid(), name: data.account });
+          });
+          learnRule(data.desc, data.category);
           sh.close(); toast("Guardado ✓");
         }}),
       ]),
@@ -231,10 +245,83 @@
     const sh = sheet(isNew ? "Nova transação" : "Editar transação", body);
   }
 
-  function uniqueCats() {
-    const set = new Set(["Supermercado", "Restaurantes", "Transportes", "Contas", "Habitação", "Saúde", "Subscrições", "Compras", "Lazer", "Salário", "Outros"]);
-    Store.get(NS).transactions.forEach((t) => t.category && set.add(t.category));
-    return [...set];
+  function seedFinance() {
+    const fin = Store.get(NS);
+    if (fin._seededV2) return;
+    Store.update(NS, (s) => {
+      if (!s.sources || !s.sources.length) s.sources = ["Dinheiro", "Cartão de débito", "Cartão de crédito", "MBWay", "Conta bancária"].map((n) => ({ id: uid(), name: n }));
+      if (!s.categories || !s.categories.length) {
+        const mk = (arr, group) => arr.map((name) => ({ name, group }));
+        s.categories = [
+          ...mk(["Supermercado", "Habitação", "Contas", "Saúde", "Transportes"], "essential"),
+          ...mk(["Restaurantes", "Subscrições", "Compras", "Lazer", "Levantamentos", "Outros"], "lifestyle"),
+          ...mk(["Salário"], "income"),
+        ];
+      }
+      s._seededV2 = true;
+    }, { silent: true });
+  }
+  function catNames() { const c = Store.get(NS).categories || []; const set = new Set(c.map((x) => x.name)); Store.get(NS).transactions.forEach((t) => t.category && set.add(t.category)); return [...set]; }
+  function uniqueCats() { return catNames(); }
+  function sourceNames() { return (Store.get(NS).sources || []).map((s) => s.name); }
+  function essentialSet() { const c = Store.get(NS).categories || []; const s = c.filter((x) => x.group === "essential").map((x) => x.name); return s.length ? s : Domain.ESSENTIAL_CATS; }
+  function catGroup(name) { const c = (Store.get(NS).categories || []).find((x) => x.name === name); return c ? c.group : (Domain.ESSENTIAL_CATS.includes(name) ? "essential" : "lifestyle"); }
+
+  /* -------- Gestão de categorias e fontes de pagamento -------- */
+  function manageCategories() {
+    const fin = Store.get(NS);
+    const list = el("div", { class: "list" });
+    const GROUPS = { essential: "Essencial", lifestyle: "Estilo de vida", income: "Receita" };
+    (fin.categories || []).forEach((c) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editCategory(c) }, [
+      el("div", { class: "grow" }, [el("div", { class: "t", text: c.name }), el("div", { class: "s", text: GROUPS[c.group] || c.group })]),
+      el("span", { class: "pill" + (c.group === "essential" ? " on" : ""), text: GROUPS[c.group] }),
+    ])));
+    sheet("Categorias", [
+      el("p", { class: "tiny muted", text: "Organiza as tuas despesas e receitas. 'Essencial' vs 'Estilo de vida' alimenta os gráficos." }),
+      list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova categoria", onclick: () => editCategory(null) }),
+    ]);
+  }
+  function editCategory(c) {
+    const isNew = !c; const old = c ? c.name : "";
+    c = c || { name: "", group: "lifestyle" };
+    const fn = field("Nome", { value: c.name, placeholder: "ex: Viagens" });
+    const fg = field("Grupo", { type: "select", value: c.group, options: [{ value: "essential", label: "Essencial" }, { value: "lifestyle", label: "Estilo de vida" }, { value: "income", label: "Receita" }] });
+    const sh = sheet(isNew ? "Nova categoria" : "Editar categoria", [fn, fg, el("div", { class: "row", style: "gap:10px" }, [
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.categories = s.categories.filter((x) => x.name !== old); }); sh.close(); manageCategories(); } }) : null,
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+        const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
+        Store.update(NS, (s) => {
+          const i = s.categories.findIndex((x) => x.name === old);
+          if (i >= 0) { s.categories[i] = { name, group: fg.input.value }; if (old !== name) s.transactions.forEach((t) => { if (t.category === old) t.category = name; }); }
+          else s.categories.push({ name, group: fg.input.value });
+        });
+        sh.close(); manageCategories();
+      }}),
+    ])]);
+  }
+  function manageSources() {
+    const fin = Store.get(NS);
+    const list = el("div", { class: "list" });
+    (fin.sources || []).forEach((src) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editSource(src) }, [
+      el("div", { class: "grow t", text: src.name }), el("span", { class: "tiny muted", text: "✎" }),
+    ])));
+    sheet("Fontes de pagamento", [
+      el("p", { class: "tiny muted", text: "Onde entra/sai o dinheiro: dinheiro, cartões, MBWay, contas…" }),
+      list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova fonte", onclick: () => editSource(null) }),
+    ]);
+  }
+  function editSource(src) {
+    const isNew = !src; const old = src ? src.name : "";
+    src = src || { id: uid(), name: "" };
+    const fn = field("Nome", { value: src.name, placeholder: "ex: Cartão Revolut" });
+    const sh = sheet(isNew ? "Nova fonte" : "Editar fonte", [fn, el("div", { class: "row", style: "gap:10px" }, [
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.sources = s.sources.filter((x) => x.id !== src.id); }); sh.close(); manageSources(); } }) : null,
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+        const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
+        Store.update(NS, (s) => { const i = s.sources.findIndex((x) => x.id === src.id); if (i >= 0) { s.sources[i].name = name; if (old !== name) s.transactions.forEach((t) => { if (t.account === old) t.account = name; }); } else s.sources.push({ id: src.id, name }); });
+        sh.close(); manageSources();
+      }}),
+    ])]);
   }
 
   /* ------- Categorização que aprende com as correções do utilizador ------- */
@@ -293,13 +380,15 @@
     const fDay = field("Dia do mês (1–28)", { type: "number", value: r.day, min: 1, max: 28, inputmode: "numeric" });
     const fDesc = field("Descrição", { value: r.desc, placeholder: "ex: Renda, Ordenado, Netflix…" });
     const fCat = field("Categoria", { value: r.category, list: "rcats" });
-    const dl = el("datalist", { id: "rcats" }, uniqueCats().map((c) => el("option", { value: c })));
+    const dl = el("datalist", { id: "rcats" }, catNames().map((c) => el("option", { value: c })));
+    const fSrc = field("Fonte de pagamento", { value: r.account || sourceNames()[0] || "", list: "rsrc" });
+    const dlS = el("datalist", { id: "rsrc" }, sourceNames().map((c) => el("option", { value: c })));
     const sh = sheet(isNew ? "Novo recorrente" : "Editar recorrente", [
-      fType, el("div", { class: "input-row" }, [fAmount, fDay]), fDesc, fCat, dl,
+      fType, el("div", { class: "input-row" }, [fAmount, fDay]), fDesc, fCat, dl, fSrc, dlS,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.recurring = s.recurring.filter((x) => x.id !== r.id); }); sh.close(); manageRecurring(); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
-          const data = { ...r, desc: fDesc.input.value.trim() || "Recorrente", amount: Math.abs(parseFloat(fAmount.input.value) || 0), type: fType.input.value, category: fCat.input.value.trim() || "Outros", day: Math.min(28, Math.max(1, parseInt(fDay.input.value) || 1)) };
+          const data = { ...r, desc: fDesc.input.value.trim() || "Recorrente", amount: Math.abs(parseFloat(fAmount.input.value) || 0), type: fType.input.value, category: fCat.input.value.trim() || "Outros", account: fSrc.input.value.trim() || "Dinheiro", day: Math.min(28, Math.max(1, parseInt(fDay.input.value) || 1)) };
           if (!data.amount) return toast("Indica um valor.");
           Store.update(NS, (s) => { const i = s.recurring.findIndex((x) => x.id === data.id); if (i >= 0) s.recurring[i] = data; else s.recurring.push(data); });
           applyRecurring(); sh.close(); toast("Guardado ✓");
@@ -421,7 +510,7 @@
   /* ----------------------------- ORÇAMENTOS ----------------------------- */
   function renderBudgets(view) {
     const fin = Store.get(NS);
-    const s = D.financeSummary(fin, viewMonth);
+    const s = D.financeSummary(fin, viewMonth, essentialSet());
     $("#subtitle").textContent = "Orçamentos mensais";
     const cats = new Set([...Object.keys(fin.budgets), ...Object.keys(s.byCat)]);
     const list = el("div", { class: "stack" });
@@ -464,6 +553,85 @@
         }}),
       ]),
     ]);
+  }
+
+  /* ----------------------------- POUPANÇA ----------------------------- */
+  function savingsData(fin) {
+    const months = {};
+    (fin.transactions || []).forEach((t) => {
+      if (t.type === "transfer") return;
+      const mk = (t.date || "").slice(0, 7); if (!/^\d{4}-\d{2}$/.test(mk)) return;
+      months[mk] = months[mk] || { income: 0, expense: 0 };
+      if (t.type === "income") months[mk].income += t.amount; else months[mk].expense += t.amount;
+    });
+    const arr = Object.entries(months).map(([mk, v]) => ({ mk, save: v.income - v.expense, income: v.income, expense: v.expense })).sort((a, b) => a.mk.localeCompare(b.mk));
+    const years = {}; arr.forEach((m) => { const y = m.mk.slice(0, 4); years[y] = (years[y] || 0) + m.save; });
+    const total = arr.reduce((a, m) => a + m.save, 0);
+    return { arr, years, total };
+  }
+
+  function renderSavings(view) {
+    const fin = Store.get(NS);
+    $("#subtitle").textContent = "Quanto estás a poupar";
+    const { arr, years, total } = savingsData(fin);
+    const curYear = String(new Date().getFullYear());
+    const thisYear = years[curYear] || 0;
+    const avg = arr.length ? total / arr.length : 0;
+
+    const hero = el("div", { class: "hero" }, [
+      el("div", { class: "label", text: "Poupança total" }),
+      el("div", { class: "value", text: eur(total) }),
+      el("div", { class: "foot", text: `${curYear}: ${eur0(thisYear)} · média ${eur0(avg)}/mês` }),
+    ]);
+
+    // Gráfico mensal de poupança (últimos 12) — verde/vermelho
+    let chart = null;
+    if (arr.length) {
+      const last = arr.slice(-12);
+      const maxV = Math.max(1, ...last.map((m) => Math.abs(m.save)));
+      const bars = el("div", { class: "row", style: "align-items:center;gap:8px;height:120px;margin-top:12px;position:relative" });
+      last.forEach((m) => {
+        const h = Math.max(3, (Math.abs(m.save) / maxV) * 48);
+        const up = m.save >= 0;
+        bars.appendChild(el("div", { style: "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:2px" }, [
+          el("div", { style: "flex:1;display:flex;flex-direction:column;justify-content:flex-end;width:100%;align-items:center" }, [up ? el("div", { style: `width:100%;max-width:22px;height:${h}px;border-radius:5px 5px 0 0;background:var(--good)` }) : el("div", { style: "height:0" })]),
+          el("div", { style: "height:1px;width:100%;background:var(--border-2)" }),
+          el("div", { style: "flex:1;display:flex;flex-direction:column;justify-content:flex-start;width:100%;align-items:center" }, [!up ? el("div", { style: `width:100%;max-width:22px;height:${h}px;border-radius:0 0 5px 5px;background:var(--bad)` }) : el("div", { style: "height:0" })]),
+          el("div", { class: "tiny muted", style: "font-size:.58rem", text: m.mk.slice(5) }),
+        ]));
+      });
+      chart = el("div", { class: "card" }, [el("strong", { text: "Poupança por mês" }), bars]);
+    }
+
+    // Por ano
+    const yearsCard = el("div", { class: "card" }, [el("strong", { text: "Por ano" })]);
+    const ykeys = Object.keys(years).sort((a, b) => b.localeCompare(a));
+    if (!ykeys.length) yearsCard.appendChild(el("div", { class: "empty tiny", text: "Sem dados ainda." }));
+    else { const list = el("div", { class: "list" }); ykeys.forEach((y) => list.appendChild(el("div", { class: "item" }, [
+      el("div", { class: "grow t", text: y }), el("div", { class: "amt", style: "color:" + (years[y] >= 0 ? "var(--good)" : "var(--bad)"), text: eur(years[y]) })])));
+      yearsCard.appendChild(list); }
+
+    // Donut: categorias onde gastou mais (ano atual)
+    const byCat = {};
+    (fin.transactions || []).forEach((t) => { if (t.type === "expense" && (t.date || "").slice(0, 4) === curYear) byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
+    const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    let catCard;
+    if (cats.length) {
+      const totalExp = cats.reduce((a, c) => a + c[1], 0) || 1;
+      const parts = cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) }));
+      const legend = el("div", { class: "legend", style: "flex:1" }, parts.slice(0, 7).map((p) => el("div", { class: "lg" }, [
+        el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
+        el("span", { class: "vl tiny", text: eur0(p.value) + " · " + Math.round(p.value / totalExp * 100) + "%" }),
+      ])));
+      catCard = el("div", { class: "card" }, [
+        el("div", { class: "row between" }, [el("strong", { text: "Onde gastas mais" }), el("span", { class: "tiny muted", text: curYear })]),
+        el("div", { class: "row", style: "gap:18px;margin-top:14px;align-items:center" }, [
+          el("div", { class: "ringwrap", style: "flex:none" }, [donut(parts, { size: 132 })]), legend,
+        ]),
+      ]);
+    } else catCard = el("div", { class: "card empty", html: '<span class="ico">🥧</span>Sem despesas este ano ainda.' });
+
+    view.appendChild(el("div", { class: "stack" }, [hero, chart, catCard, yearsCard].filter(Boolean)));
   }
 
   /* ----------------------------- PATRIMÓNIO ----------------------------- */

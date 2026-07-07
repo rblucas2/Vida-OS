@@ -33,9 +33,16 @@
     return { tmb: Math.round(tmb), getd: Math.round(getd), kcal: Math.round(kcal), protein, carbs: Math.max(0, carbs), fat };
   }
 
+  /** Metas base: manuais (customTargets) têm prioridade; senão Mifflin-St Jeor. */
+  function baseTargets(nut) {
+    const c = nut && nut.customTargets;
+    if (c && c.kcal) return { tmb: null, getd: null, kcal: +c.kcal || 0, protein: +c.protein || 0, carbs: +c.carbs || 0, fat: +c.fat || 0, manual: true };
+    return nutritionTargets(nut && nut.profile);
+  }
+
   /** Aplica "ciclismo de nutrientes" se houve treino hoje. +12% kcal/hidratos. */
   function effectiveTargets(nut, los, dateISO = todayISO()) {
-    const base = nutritionTargets(nut.profile);
+    const base = baseTargets(nut);
     if (!base) return null;
     if (workoutDone(nut, los, dateISO)) {
       const kcal = Math.round(base.kcal * 1.12);
@@ -141,19 +148,22 @@
     return (transactions || []).filter((t) => (t.date || "").slice(0, 7) === mk);
   }
 
-  /** Resumo financeiro do mês (para a app e para o widget do Life OS). */
-  function financeSummary(fin, mk = monthKey()) {
+  /** Resumo financeiro do mês (para a app e para o widget do Life OS).
+      Transferências entre contas próprias (type === "transfer") são ignoradas. */
+  function financeSummary(fin, mk = monthKey(), essentialCats) {
+    const ess = (essentialCats && essentialCats.length) ? essentialCats : ESSENTIAL_CATS;
     const tx = txInMonth(fin.transactions, mk);
     let income = 0, expense = 0;
     const byCat = {};
     tx.forEach((t) => {
+      if (t.type === "transfer") return;
       if (t.type === "income") income += t.amount;
       else { expense += t.amount; byCat[t.category] = (byCat[t.category] || 0) + t.amount; }
     });
     // Compromissos = orçamento essencial ainda por gastar
     const budgets = fin.budgets || {};
     let committed = 0;
-    ESSENTIAL_CATS.forEach((c) => {
+    ess.forEach((c) => {
       const lim = budgets[c] || 0; const spent = byCat[c] || 0;
       if (lim > spent) committed += lim - spent;
     });
@@ -189,7 +199,7 @@
 
   global.Domain = {
     ACTIVITY, DEFAULT_RULES, ESSENTIAL_CATS,
-    mifflin, nutritionTargets, effectiveTargets, workoutDone, dayIntake, nutritionSummary,
+    mifflin, nutritionTargets, baseTargets, effectiveTargets, workoutDone, dayIntake, nutritionSummary,
     categorize, financeSummary, netWorth, isEssential, txInMonth,
     habitStreak, gymStreak,
     gymState, gymLog, gymConnected, gymWorkoutDone, gymWeekCount, gymLastSession,

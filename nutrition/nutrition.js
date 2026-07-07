@@ -33,7 +33,7 @@
 
   function init() {
     App.boot({ active: "nutrition" });
-    Store.ensure(NS, { profile: null, foods: SEED_FOODS, diary: {}, meals: [], workoutDays: {}, weightLog: {}, mealPlan: {} });
+    Store.ensure(NS, { profile: null, customTargets: null, foods: SEED_FOODS, diary: {}, meals: [], workoutDays: {}, weightLog: {}, mealPlan: {} });
     App.onboard("nutrition", "Nutrição", [
       "🧮 Define o teu perfil na <b>Calculadora</b> (Mifflin-St Jeor).",
       "📷 Regista comida com o <b>scanner de código de barras</b> (Open Food Facts).",
@@ -68,8 +68,12 @@
 
     if (!targets) {
       view.appendChild(el("div", { class: "card empty" }, [
-        el("p", { text: "Define o teu perfil para calcular as metas diárias." }),
-        el("button", { class: "btn btn-primary", text: "Abrir calculadora", onclick: () => switchTab("calc") }),
+        el("span", { class: "ico", text: "🎯" }),
+        el("p", { text: "Define as tuas metas diárias para começares a registar." }),
+        el("div", { class: "row", style: "gap:10px;justify-content:center" }, [
+          el("button", { class: "btn btn-primary", text: "Definir metas", onclick: () => setManualTargets() }),
+          el("button", { class: "btn btn-soft", text: "Calcular (perfil)", onclick: () => switchTab("calc") }),
+        ]),
       ]));
       return;
     }
@@ -99,34 +103,24 @@
       ]),
     ]);
 
-    // Repartição de macros (% das calorias) — donut estilo MyFitnessPal
-    const kcalP = got.p * 4, kcalC = got.c * 4, kcalF = got.f * 9;
-    const sumMacroKcal = kcalP + kcalC + kcalF || 1;
-    const macroParts = [
-      { label: "Proteína", value: kcalP, color: "var(--good)", g: got.p, tgt: targets.protein },
-      { label: "Hidratos", value: kcalC, color: "#3b82f6", g: got.c, tgt: targets.carbs },
-      { label: "Gordura", value: kcalF, color: "var(--warn)", g: got.f, tgt: targets.fat },
-    ];
-    const macroLegend = el("div", { class: "macros3", style: "flex:1" }, macroParts.map((m) => {
-      const pctCal = Math.round(m.value / sumMacroKcal * 100);
-      const pctTgt = m.tgt ? Math.min(100, (m.g / m.tgt) * 100) : 0;
-      const wrap = el("div", { class: "macro" }, [
-        el("div", { class: "mv", style: "color:" + m.color, text: num(m.g) + "g" }),
-        el("div", { class: "mk", text: m.label + " · " + pctCal + "%" }),
-        el("div", { class: "mbar" }, [el("i", { style: `width:${pctTgt}%;background:${m.color}` })]),
-        el("div", { style: "font-size:.62rem;color:var(--text-mute);margin-top:3px", text: "meta " + num(m.tgt) + "g" }),
+    // Macros RESTANTES — descontam à medida que registas (estilo MyFitnessPal)
+    const macroCol = (label, color, g, tgt) => {
+      const rem = Math.round(tgt - g);
+      const pct = tgt ? Math.min(100, (g / tgt) * 100) : 0;
+      return el("div", { class: "macro" }, [
+        el("div", { class: "mk", text: label }),
+        el("div", { class: "mv", style: "color:" + (rem < 0 ? "var(--bad)" : color), text: num(Math.abs(rem)) + "g" }),
+        el("div", { style: "font-size:.6rem;color:var(--text-mute);margin-top:-2px", text: rem >= 0 ? "restam" : "a mais" }),
+        el("div", { class: "mbar", style: "margin-top:5px" }, [el("i", { style: `width:${pct}%;background:${rem < 0 ? "var(--bad)" : color}` })]),
+        el("div", { style: "font-size:.62rem;color:var(--text-mute);margin-top:4px", text: num(g) + " / " + num(tgt) + "g" }),
       ]);
-      return wrap;
-    }));
+    };
     const macros = el("div", { class: "card" }, [
-      el("div", { class: "row between" }, [el("strong", { text: "Macronutrientes" }), el("span", { class: "tiny muted", text: "% das calorias" })]),
-      el("div", { class: "row", style: "gap:16px;margin-top:12px;align-items:center" }, [
-        el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
-          donut(macroParts, { size: 118, stroke: 18 }),
-          el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
-            el("div", { class: "num", style: "font-weight:800", text: num(got.kcal) }), el("div", { class: "tiny muted", style: "font-size:.6rem", text: "kcal" })]),
-        ]),
-        macroLegend,
+      el("div", { class: "row between" }, [el("strong", { text: "Macros por atingir" }), el("span", { class: "tiny muted", text: "meta − consumido" })]),
+      el("div", { class: "macros3", style: "margin-top:12px" }, [
+        macroCol("Proteína", "var(--good)", got.p, targets.protein),
+        macroCol("Hidratos", "#3b82f6", got.c, targets.carbs),
+        macroCol("Gordura", "var(--warn)", got.f, targets.fat),
       ]),
     ]);
 
@@ -323,10 +317,29 @@
     toast("Adicionado ✓");
   }
 
-  /* ----------------------------- CALCULADORA ----------------------------- */
+  /* ----------------------------- PERFIL / METAS ----------------------------- */
+  function setManualTargets() {
+    const nut = Store.get(NS); const c = nut.customTargets || {};
+    const t = D.baseTargets(nut) || {};
+    const fk = field("Calorias (kcal)", { type: "number", value: c.kcal || t.kcal || "", inputmode: "numeric" });
+    const fp = field("Proteína (g)", { type: "number", value: c.protein || t.protein || "", inputmode: "numeric" });
+    const fc = field("Hidratos (g)", { type: "number", value: c.carbs || t.carbs || "", inputmode: "numeric" });
+    const fg = field("Gordura (g)", { type: "number", value: c.fat || t.fat || "", inputmode: "numeric" });
+    const sh = sheet("Definir metas manualmente", [
+      el("p", { class: "tiny muted", text: "Define os teus alvos diários. Estes têm prioridade sobre a calculadora." }),
+      fk, el("div", { class: "input-row" }, [fp, fc]), fg,
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar metas", onclick: () => {
+        const kcal = +fk.input.value; if (!kcal) return toast("Indica as calorias.");
+        Store.update(NS, (s) => { s.customTargets = { kcal, protein: +fp.input.value || 0, carbs: +fc.input.value || 0, fat: +fg.input.value || 0 }; });
+        sh.close(); toast("Metas guardadas ✓"); switchTab("hoje");
+      }}),
+    ]);
+  }
+
   function renderCalc(view) {
     const nut = Store.get(NS); const p = nut.profile || { sex: "m", activity: "moderado", goal: "maintain" };
-    $("#subtitle").textContent = "Calculadora de calorias";
+    $("#subtitle").textContent = "Perfil e metas";
+    const usingManual = !!(nut.customTargets && nut.customTargets.kcal);
     const fAge = field("Idade", { type: "number", value: p.age || "", inputmode: "numeric" });
     const fSex = field("Sexo", { type: "select", value: p.sex, options: [{ value: "m", label: "Masculino" }, { value: "f", label: "Feminino" }] });
     const fW = field("Peso (kg)", { type: "number", value: p.weight || "", inputmode: "decimal" });
@@ -349,13 +362,28 @@
         kpi("Proteína", num(t.protein) + " g"), kpi("Hidratos", num(t.carbs) + " g"),
         kpi("Gordura", num(t.fat) + " g"), kpi("", ""),
       ]));
-      if (save) Store.update(NS, (s) => { s.profile = prof; s.targets = t; });
+      if (save) Store.update(NS, (s) => { s.profile = prof; s.targets = t; s.customTargets = null; });
     }
     [fAge, fSex, fW, fH, fAct, fGoal].forEach((f) => f.input.addEventListener("input", () => recompute(false)));
     recompute(false);
 
+    // Cartão de metas manuais
+    const manualCard = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [
+        el("strong", { text: "Metas manuais" }),
+        el("span", { class: "pill" + (usingManual ? " on" : ""), text: usingManual ? "ativas ✓" : "desligadas" }),
+      ]),
+      el("p", { class: "tiny muted", style: "margin:6px 0 0", text: usingManual ? "As tuas metas estão definidas manualmente." : "Sabes os teus alvos? Define-os diretamente (ex: 150g de proteína)." }),
+      el("div", { class: "row", style: "gap:10px;margin-top:10px" }, [
+        el("button", { class: "btn btn-primary btn-block", text: usingManual ? "Editar metas" : "Definir metas", onclick: setManualTargets }),
+        usingManual ? el("button", { class: "btn btn-block", text: "Usar calculadora", onclick: () => { Store.update(NS, (s) => { s.customTargets = null; }); } }) : null,
+      ]),
+    ]);
+
     view.appendChild(el("div", { class: "stack" }, [
       weightCard(),
+      manualCard,
+      el("div", { class: "section-title", text: "Calculadora (Mifflin-St Jeor)" }),
       el("div", { class: "card" }, [
         el("div", { class: "input-row" }, [fAge, fSex]),
         el("div", { class: "input-row", style: "margin-top:12px" }, [fW, fH]),
@@ -363,7 +391,7 @@
         el("div", { style: "margin-top:12px" }, [fGoal]),
       ]),
       out,
-      el("button", { class: "btn btn-primary btn-block", text: "Guardar metas", onclick: () => { recompute(true); toast("Metas guardadas ✓"); switchTab("hoje"); } }),
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar metas calculadas", onclick: () => { recompute(true); toast("Metas guardadas ✓"); switchTab("hoje"); } }),
     ]));
   }
   function kpi(k, v) { return el("div", { class: "kpi center" }, [el("div", { class: "v", text: v }), el("div", { class: "k", text: k })]); }
