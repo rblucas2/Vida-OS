@@ -48,39 +48,89 @@
   }
 
   /* ----------------------------- RESUMO ----------------------------- */
+  function monthlySeries(fin, endMk, n = 6) {
+    const out = [];
+    const [ey, em] = endMk.split("-").map(Number);
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(ey, em - 1 - i, 1); const mk = monthKey(d);
+      const s = D.financeSummary(fin, mk);
+      out.push({ mk, label: UI.MONTHS[d.getMonth()].slice(0, 3), income: s.income, expense: s.expense, net: s.balance });
+    }
+    return out;
+  }
+  function dailyCumulative(fin, mk) {
+    const tx = D.txInMonth(fin.transactions, mk).filter((t) => t.type === "expense");
+    const days = new Date(+mk.slice(0, 4), +mk.slice(5) , 0).getDate();
+    const perDay = new Array(days).fill(0);
+    tx.forEach((t) => { const d = parseInt((t.date || "").slice(8, 10), 10); if (d >= 1 && d <= days) perDay[d - 1] += t.amount; });
+    let acc = 0; return perDay.map((v) => (acc += v));
+  }
+
   function renderResumo(view) {
     const fin = Store.get(NS);
     const s = D.financeSummary(fin, viewMonth);
     $("#subtitle").textContent = "Visão geral";
 
-    // Dinheiro livre
-    const free = el("div", { class: "card center" }, [
-      el("div", { class: "k", style: "text-transform:uppercase;letter-spacing:.06em;font-size:.72rem;color:var(--text-soft)", text: "Dinheiro livre este mês" }),
-      el("div", { class: "big num", style: "color:" + (s.free < 0 ? "var(--bad)" : "var(--good)") + ";margin-top:4px", text: eur(s.free) }),
-      el("div", { class: "tiny muted", style: "margin-top:2px", text: `Rendimentos ${eur0(s.income)} − gastos ${eur0(s.expense)} − compromissos ${eur0(s.committed)}` }),
+    // HERO — Dinheiro livre
+    const hero = el("div", { class: "hero" }, [
+      el("div", { class: "label", text: "Dinheiro livre" }),
+      el("div", { class: "value", text: eur(s.free) }),
+      el("div", { class: "foot", text: `${UI.prettyMonth(viewMonth)} · rend. ${eur0(s.income)} − gastos ${eur0(s.expense)} − compromissos ${eur0(s.committed)}` }),
     ]);
 
     const kpis = el("div", { class: "grid-2" }, [
-      kpiCard("Rendimentos", eur(s.income), "var(--good)"),
-      kpiCard("Despesas", eur(s.expense), "var(--bad)"),
+      kpiCard("Rendimentos", eur(s.income), "var(--good)", "↑"),
+      kpiCard("Despesas", eur(s.expense), "var(--bad)", "↓"),
     ]);
+
+    // Evolução mensal (receitas vs despesas) — 6 meses
+    const series = monthlySeries(fin, viewMonth, 6);
+    const maxV = Math.max(1, ...series.map((m) => Math.max(m.income, m.expense)));
+    const bars = el("div", { class: "row", style: "align-items:flex-end;gap:10px;height:120px;margin-top:14px" });
+    series.forEach((m) => {
+      const cur = m.mk === viewMonth;
+      const col = (v, c) => el("div", { style: `flex:1;max-width:14px;height:${Math.max(3, (v / maxV) * 92)}px;border-radius:5px 5px 3px 3px;background:${c};opacity:${cur ? 1 : .55}` });
+      bars.appendChild(el("div", { style: "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end" }, [
+        el("div", { class: "row", style: "gap:3px;align-items:flex-end;height:100%;width:100%;justify-content:center" }, [col(m.income, "var(--good)"), col(m.expense, "var(--bad)")]),
+        el("div", { class: "tiny muted", style: "font-size:.62rem;" + (cur ? "font-weight:800;color:var(--accent)" : ""), text: m.label }),
+      ]));
+    });
+    const trendCard = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [el("strong", { text: "Evolução (6 meses)" }),
+        el("div", { class: "row", style: "gap:12px" }, [el("span", { class: "tiny", html: `<span class="dot" style="background:var(--good)"></span> Receitas` }), el("span", { class: "tiny", html: `<span class="dot" style="background:var(--bad)"></span> Despesas` })])]),
+      bars,
+    ]);
+
+    // Gasto acumulado no mês (linha)
+    let cumCard = null;
+    const cum = dailyCumulative(fin, viewMonth);
+    if (cum[cum.length - 1] > 0) {
+      cumCard = el("div", { class: "card" }, [
+        el("div", { class: "row between" }, [el("strong", { text: "Gasto acumulado no mês" }), el("span", { class: "num", style: "font-weight:800", text: eur0(cum[cum.length - 1]) })]),
+        UI.lineChart(cum, { height: 74, color: "var(--accent)", labels: ["dia 1", "dia " + cum.length] }),
+      ]);
+    }
 
     // Donut por categoria
     const cats = Object.entries(s.byCat).sort((a, b) => b[1] - a[1]);
     let chartCard;
     if (cats.length) {
       const parts = cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) }));
-      const legend = el("div", { style: "flex:1" }, parts.slice(0, 8).map((p) => el("div", { class: "row", style: "justify-content:space-between;padding:3px 0" }, [
-        el("span", { class: "tiny", html: `<span class="dot" style="background:${p.color}"></span> ${p.label}` }),
-        el("span", { class: "tiny num muted", text: eur0(p.value) + " · " + Math.round(p.value / s.expense * 100) + "%" }),
+      const legend = el("div", { class: "legend", style: "flex:1" }, parts.slice(0, 7).map((p) => el("div", { class: "lg" }, [
+        el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
+        el("span", { class: "vl tiny", text: eur0(p.value) + " · " + Math.round(p.value / s.expense * 100) + "%" }),
       ])));
       chartCard = el("div", { class: "card" }, [
         el("strong", { text: "Para onde foi o dinheiro" }),
-        el("div", { class: "row", style: "gap:18px;margin-top:12px;align-items:center" }, [
-          el("div", { class: "ringwrap", style: "flex:none" }, [donut(parts, { size: 130 })]), legend,
+        el("div", { class: "row", style: "gap:18px;margin-top:14px;align-items:center" }, [
+          el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
+            donut(parts, { size: 132 }),
+            el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
+              el("div", { class: "num", style: "font-weight:800;font-size:1.05rem", text: eur0(s.expense) }), el("div", { class: "tiny muted", style: "font-size:.62rem", text: "gasto" })]),
+          ]), legend,
         ]),
       ]);
-    } else chartCard = el("div", { class: "card empty", text: "Sem despesas neste mês. Importa um CSV ou adiciona transações." });
+    } else chartCard = el("div", { class: "card empty", html: '<span class="ico">📊</span>Sem despesas neste mês. Importa um CSV ou adiciona transações.' });
 
     // Top despesas
     const tx = D.txInMonth(fin.transactions, viewMonth).filter((t) => t.type === "expense").sort((a, b) => b.amount - a.amount).slice(0, 5);
@@ -94,18 +144,18 @@
     const tot = ess + life || 1;
     const splitCard = el("div", { class: "card" }, [
       el("strong", { text: "Essenciais vs. Estilo de vida" }),
-      el("div", { class: "row", style: "justify-content:space-between;margin-top:10px" }, [el("span", { class: "tiny", text: "Essenciais" }), el("span", { class: "tiny num", text: eur0(ess) + " · " + Math.round(ess / tot * 100) + "%" })]),
+      el("div", { class: "row between", style: "margin-top:10px" }, [el("span", { class: "tiny", text: "Essenciais" }), el("span", { class: "tiny num", text: eur0(ess) + " · " + Math.round(ess / tot * 100) + "%" })]),
       barColored(ess / tot * 100, "var(--accent)"),
-      el("div", { class: "row", style: "justify-content:space-between;margin-top:10px" }, [el("span", { class: "tiny", text: "Estilo de vida" }), el("span", { class: "tiny num", text: eur0(life) + " · " + Math.round(life / tot * 100) + "%" })]),
+      el("div", { class: "row between", style: "margin-top:10px" }, [el("span", { class: "tiny", text: "Estilo de vida" }), el("span", { class: "tiny num", text: eur0(life) + " · " + Math.round(life / tot * 100) + "%" })]),
       barColored(life / tot * 100, "var(--warn)"),
     ]);
 
     view.appendChild(monthNav(() => render("resumo")));
-    view.appendChild(el("div", { class: "stack" }, [free, kpis, chartCard, splitCard, topCard]));
+    view.appendChild(el("div", { class: "stack" }, [hero, kpis, trendCard, cumCard, chartCard, splitCard, topCard].filter(Boolean)));
   }
 
-  function kpiCard(k, v, color) { return el("div", { class: "card kpi" }, [el("div", { class: "v num", style: "color:" + color, text: v }), el("div", { class: "k", text: k })]); }
-  function barColored(pct, color) { const b = bar(pct); b.firstChild.style.background = color; b.style.marginTop = "6px"; return b; }
+  function kpiCard(k, v, color, arrow) { return el("div", { class: "card kpi pad-sm" }, [el("div", { class: "k", text: k }), el("div", { class: "v num", style: "color:" + color, text: (arrow ? arrow + " " : "") + v })]); }
+  function barColored(pct, color) { const b = bar(Math.min(100, pct)); b.firstChild.style.background = color; b.style.marginTop = "6px"; return b; }
 
   /* ----------------------------- TRANSAÇÕES ----------------------------- */
   function renderTx(view) {
@@ -424,12 +474,12 @@
     // snapshot do mês atual
     Store.update(NS, (s) => { s.nwHistory = s.nwHistory || {}; s.nwHistory[monthKey()] = nw.net; }, { silent: true });
 
-    const head = el("div", { class: "card center" }, [
-      el("div", { class: "k", style: "text-transform:uppercase;letter-spacing:.06em;font-size:.72rem;color:var(--text-soft)", text: "Net Worth" }),
-      el("div", { class: "big num", style: "color:" + (nw.net < 0 ? "var(--bad)" : "var(--text)"), text: eur(nw.net) }),
-      el("div", { class: "row", style: "justify-content:center;gap:18px;margin-top:8px" }, [
-        el("span", { class: "tiny", html: `<span class="dot" style="background:var(--good)"></span> Ativos ${eur0(nw.assets)}` }),
-        el("span", { class: "tiny", html: `<span class="dot" style="background:var(--bad)"></span> Passivos ${eur0(nw.liab)}` }),
+    const head = el("div", { class: "hero" }, [
+      el("div", { class: "label", text: "Património líquido" }),
+      el("div", { class: "value", text: eur(nw.net) }),
+      el("div", { class: "row", style: "gap:16px;margin-top:8px" }, [
+        el("span", { class: "foot", html: `● Ativos ${eur0(nw.assets)}` }),
+        el("span", { class: "foot", html: `● Passivos ${eur0(nw.liab)}` }),
       ]),
     ]);
 
@@ -437,9 +487,10 @@
     const hist = Object.entries(fin.nwHistory || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
     let histCard = null;
     if (hist.length >= 2) {
+      const delta = hist[hist.length - 1][1] - hist[0][1];
       histCard = el("div", { class: "card" }, [
-        el("strong", { text: "Evolução" }),
-        UI.sparkBars(hist.map((h) => h[1]), { labels: hist.map((h) => h[0].slice(5)), height: 70, color: "var(--good)" }),
+        el("div", { class: "row between" }, [el("strong", { text: "Evolução" }), el("span", { class: "tiny num", style: "color:" + (delta >= 0 ? "var(--good)" : "var(--bad)"), text: (delta >= 0 ? "+" : "") + eur0(delta) })]),
+        UI.lineChart(hist.map((h) => h[1]), { labels: [UI.prettyMonth(hist[0][0]).split(" ")[0], UI.prettyMonth(hist[hist.length - 1][0]).split(" ")[0]], height: 76, color: "var(--accent)" }),
       ]);
     }
 

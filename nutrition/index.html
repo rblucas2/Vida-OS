@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <title>Nutrição</title>
   <meta name="theme-color" content="#f6f6f4" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" href="../icons/nutrition.svg" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <style>:root{ --accent:#d9743b; --accent-soft:#fceee4; --on-accent:#fff; } @media (prefers-color-scheme: dark){ :root{ --accent-soft:#3a2417; } }</style>
+  <style>:root{ --accent:#e0733b; --accent-2:#e6a02e; --accent-soft:#fceee4; --on-accent:#fff; } @media (prefers-color-scheme: dark){ :root{ --accent-soft:#3a2417; } }</style>
 </head>
 <body>
   <header class="topbar">
@@ -24,9 +27,10 @@
   <main class="app">
     <div class="seg" id="tabs" style="margin:16px 0 4px">
       <button data-tab="hoje" class="active">Hoje</button>
-      <button data-tab="calc">Calculadora</button>
+      <button data-tab="plano">Plano</button>
       <button data-tab="foods">Alimentos</button>
       <button data-tab="meals">Refeições</button>
+      <button data-tab="calc">Perfil</button>
     </div>
     <div id="view"></div>
   </main>

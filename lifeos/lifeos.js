@@ -62,7 +62,8 @@
     const day = curDay();
 
     view.appendChild(integrationWidgets());
-    view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("hoje"); }));
+    view.appendChild(calHeader());
+    view.appendChild(weekStrip());
 
     // Top 3
     const tops = day.tasks.filter((t) => t.top);
@@ -108,6 +109,62 @@
 
     view.appendChild(el("div", { class: "stack" }, [top3, planCard, dumpCard]));
     view.appendChild(el("button", { class: "fab", text: "+", onclick: () => addTask(false), "aria-label": "Nova tarefa" }));
+  }
+
+  /* --------------------- Calendário / navegação de dias --------------------- */
+  function dayHasContent(iso) { const d = Store.get(NS).days[iso]; return !!(d && d.tasks && d.tasks.length); }
+  function calHeader() {
+    const d = new Date(viewDate + "T00:00:00");
+    const isToday = viewDate === todayISO();
+    return el("div", { class: "row between", style: "margin:4px 0 8px" }, [
+      el("div", { class: "row", style: "gap:8px" }, [
+        el("strong", { style: "text-transform:capitalize", text: d.toLocaleDateString("pt-PT", { month: "long", year: "numeric" }) }),
+        isToday ? null : el("button", { class: "btn btn-soft btn-sm", text: "Hoje", onclick: () => { viewDate = todayISO(); render("hoje"); } }),
+      ]),
+      el("button", { class: "btn btn-sm", html: "📅 Calendário", onclick: calendarSheet }),
+    ]);
+  }
+  function weekStrip() {
+    const strip = el("div", { class: "weekstrip" });
+    const base = new Date(viewDate + "T00:00:00"); const dow = (base.getDay() + 6) % 7;
+    const monday = new Date(base); monday.setDate(base.getDate() - dow);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday); d.setDate(monday.getDate() + i); const iso = isoDate(d);
+      strip.appendChild(el("div", { class: "d" + (iso === viewDate ? " sel" : ""), onclick: () => { viewDate = iso; render("hoje"); } }, [
+        el("div", { class: "wn", text: UI.DAYS[d.getDay()] }),
+        el("div", { class: "dn", text: d.getDate() }),
+        dayHasContent(iso) ? el("div", { class: "pt" }) : el("div", { style: "height:5px" }),
+      ]));
+    }
+    return strip;
+  }
+  function calendarSheet() {
+    const cur = new Date(viewDate + "T00:00:00"); cur.setDate(1);
+    const host = el("div", {});
+    function draw() {
+      clear(host);
+      const y = cur.getFullYear(), m = cur.getMonth();
+      const startDow = (new Date(y, m, 1).getDay() + 6) % 7;
+      const days = new Date(y, m + 1, 0).getDate();
+      host.appendChild(el("div", { class: "row between", style: "margin-bottom:12px" }, [
+        el("button", { class: "btn btn-ghost btn-sm", text: "‹", onclick: () => { cur.setMonth(m - 1); draw(); } }),
+        el("strong", { style: "text-transform:capitalize", text: UI.prettyMonth(`${y}-${String(m + 1).padStart(2, "0")}`) }),
+        el("button", { class: "btn btn-ghost btn-sm", text: "›", onclick: () => { cur.setMonth(m + 1); draw(); } }),
+      ]));
+      const grid = el("div", { class: "cal" });
+      ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].forEach((w) => grid.appendChild(el("div", { class: "wd", text: w })));
+      for (let i = 0; i < startDow; i++) grid.appendChild(el("div", {}));
+      for (let dn = 1; dn <= days; dn++) {
+        const iso = `${y}-${String(m + 1).padStart(2, "0")}-${String(dn).padStart(2, "0")}`;
+        const cls = "day" + (iso === todayISO() ? " today" : "") + (iso === viewDate ? " sel" : "");
+        grid.appendChild(el("div", { class: cls, onclick: () => { viewDate = iso; sh.close(); render("hoje"); } }, [
+          el("div", { text: dn }), dayHasContent(iso) ? el("div", { class: "mk" }, [el("i", {})]) : null,
+        ]));
+      }
+      host.appendChild(grid);
+    }
+    draw();
+    const sh = sheet("Calendário", [host, el("p", { class: "tiny muted center", style: "margin-top:12px", text: "Toca num dia para o planear." })]);
   }
 
   function taskRow(t) {
