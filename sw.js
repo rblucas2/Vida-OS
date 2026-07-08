@@ -1,5 +1,5 @@
 /* Service worker — app shell offline para a suite Vida OS */
-const VERSION = "vidaos-v9";
+const VERSION = "vidaos-v10";
 const CORE = [
   "./", "./index.html", "./dashboard.js",
   "./shared/base.css", "./shared/store.js", "./shared/sync.js",
@@ -28,19 +28,12 @@ self.addEventListener("fetch", (e) => {
   // Não interferir com chamadas externas (Open Food Facts, Supabase)
   if (url.origin !== location.origin) return;
 
-  if (req.mode === "navigate") {
-    // network-first para páginas (apanha atualizações), cai para cache offline
-    e.respondWith(
-      fetch(req).then((r) => { caches.open(VERSION).then((c) => c.put(req, r.clone())); return r; })
-        .catch(() => caches.match(req).then((m) => m || caches.match("./index.html")))
-    );
-    return;
-  }
-  // cache-first para estáticos
+  // network-first para TUDO (mesma origem): sempre a versão mais recente quando há
+  // internet; usa a cache apenas como fallback offline. Evita ficar preso a versões antigas.
   e.respondWith(
-    caches.match(req).then((m) => m || fetch(req).then((r) => {
-      if (r.ok) { const cp = r.clone(); caches.open(VERSION).then((c) => c.put(req, cp)); }
+    fetch(req).then((r) => {
+      if (r && r.ok) { const cp = r.clone(); caches.open(VERSION).then((c) => c.put(req, cp)); }
       return r;
-    }).catch(() => m))
+    }).catch(() => caches.match(req).then((m) => m || (req.mode === "navigate" ? caches.match("./index.html") : Response.error())))
   );
 });
