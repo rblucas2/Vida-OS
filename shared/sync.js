@@ -24,13 +24,11 @@
     return cfg;
   }
 
+  // Só envia "Authorization: Bearer" quando a chave é um JWT (anon legacy "eyJ…").
+  // Para as novas chaves publishable ("sb_…") basta o apikey.
+  function authFor(key) { const h = { apikey: key }; if (key && key.indexOf("eyJ") === 0) h.Authorization = "Bearer " + key; return h; }
   function headers() {
-    return {
-      apikey: cfg.key,
-      Authorization: "Bearer " + cfg.key,
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal",
-    };
+    return Object.assign({ "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, authFor(cfg.key));
   }
 
   const apps = ["los", "fin", "nut"];
@@ -101,9 +99,7 @@
 
   async function test(c) {
     const u = c.url.replace(/\/$/, "");
-    const r = await fetch(`${u}/rest/v1/app_state?select=app&limit=1`, {
-      headers: { apikey: c.key, Authorization: "Bearer " + c.key },
-    });
+    const r = await fetch(`${u}/rest/v1/app_state?select=app&limit=1`, { headers: authFor(c.key) });
     if (!r.ok) throw new Error("HTTP " + r.status + " — verifica URL/chave e se a tabela 'app_state' existe.");
     return true;
   }
