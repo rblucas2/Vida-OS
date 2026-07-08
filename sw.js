@@ -1,5 +1,5 @@
 /* Service worker — app shell offline para a suite Vida OS */
-const VERSION = "vidaos-v15";
+const VERSION = "vidaos-v16";
 const CORE = [
   "./", "./index.html", "./dashboard.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-180.png",
@@ -8,6 +8,7 @@ const CORE = [
   "./lifeos/", "./lifeos/index.html", "./lifeos/lifeos.js",
   "./finance/", "./finance/index.html", "./finance/finance.js",
   "./nutrition/", "./nutrition/index.html", "./nutrition/nutrition.js",
+  "./gymos/", "./gymos/index.html",
 ];
 
 self.addEventListener("install", (e) => {
