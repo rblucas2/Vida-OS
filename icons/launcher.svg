@@ -1,8 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="112" fill="#1b1b1a"/>
-  <circle cx="170" cy="186" r="46" fill="#3b6ef5"/>
-  <circle cx="342" cy="186" r="46" fill="#2e9e5b"/>
-  <circle cx="256" cy="338" r="46" fill="#d9743b"/>
-  <circle cx="256" cy="256" r="20" fill="#f6f6f4"/>
-  <path d="M256 256 L170 186 M256 256 L342 186 M256 256 L256 338" stroke="#f6f6f4" stroke-width="10" stroke-linecap="round"/>
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4571f0"/>
+      <stop offset="1" stop-color="#7b46f0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="150" cy="120" r="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#0a1030" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <g filter="url(#soft)" stroke-linecap="round">
+    <path d="M256 256 L176 186 M256 256 L336 186 M256 256 L256 360" stroke="#ffffff" stroke-opacity="0.5" stroke-width="13"/>
+    <circle cx="176" cy="186" r="31" fill="#8fb4ff"/>
+    <circle cx="336" cy="186" r="31" fill="#37d6a0"/>
+    <circle cx="256" cy="360" r="31" fill="#ff9a52"/>
+    <circle cx="256" cy="256" r="37" fill="#ffffff"/>
+  </g>
 </svg>
