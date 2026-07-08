@@ -351,7 +351,9 @@
       try { rec.start(); recording = true; micBtn.classList.replace("btn-soft", "btn-primary"); micBtn.innerHTML = "⏹️ A gravar…"; toast("A ouvir… fala à vontade."); }
       catch (e) { toast("Não foi possível iniciar o microfone."); }
     });
-    const micRow = el("div", { class: "row between", style: "margin:12px 0 6px" }, [el("span", { class: "tiny muted", text: "O teu dia" }), micBtn]);
+    const micRow = SR
+      ? el("div", { class: "row between", style: "margin:12px 0 6px" }, [el("span", { class: "tiny muted", text: "O teu dia" }), micBtn])
+      : el("div", { class: "tiny muted", style: "margin:12px 0 6px", html: "🎤 O Firefox não suporta ditado dentro da app. <b>Dica:</b> toca na caixa abaixo e usa o <b>microfone do teclado</b> do telemóvel (funciona em qualquer app). O botão de ditar aparece no Chrome/Safari." });
 
     const prompts = ["O melhor momento de hoje…", "Um desafio que enfrentei…", "Algo por que estou grato…", "O que quero melhorar amanhã…"];
     const promptRow = el("div", { class: "row wrap", style: "gap:6px;margin-top:8px" }, prompts.map((p) => el("button", { class: "pill", text: p, onclick: () => { ta.value += (ta.value ? "\n\n" : "") + p + " "; ta.focus(); ta.dispatchEvent(new Event("input")); } })));
