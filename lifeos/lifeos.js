@@ -78,36 +78,78 @@
     top3.appendChild(tl);
     if (tops.length < 3) top3.appendChild(el("button", { class: "btn btn-soft btn-block btn-sm", style: "margin-top:10px", text: "+ Adicionar prioridade", onclick: () => addTask(true) }));
 
-    // Time-blocking
-    const planCard = el("div", { class: "card" }, [el("strong", { html: "🗓️ Plano do dia" })]);
-    BLOCKS.forEach((bl) => {
-      const tasks = day.tasks.filter((t) => t.block === bl.id);
-      const head = el("div", { class: "row", style: "justify-content:space-between;margin-top:12px" }, [
-        el("span", { class: "section-title", style: "margin:0", text: bl.icon + " " + bl.label }),
-        el("button", { class: "btn btn-ghost btn-sm", text: "+", onclick: () => addTask(false, bl.id) }),
-      ]);
-      planCard.appendChild(head);
-      if (!tasks.length) planCard.appendChild(el("div", { class: "tiny muted", style: "padding:2px 2px 4px", text: "—" }));
-      const list = el("div", { class: "list" });
-      tasks.forEach((t) => list.appendChild(taskRow(t)));
-      planCard.appendChild(list);
-    });
-    // tarefas sem bloco
-    const unb = day.tasks.filter((t) => !t.block);
-    if (unb.length) {
-      planCard.appendChild(el("div", { class: "section-title", text: "Sem horário" }));
-      const list = el("div", { class: "list" }); unb.forEach((t) => list.appendChild(taskRow(t))); planCard.appendChild(list);
-    }
-
-    // Brain dump
-    const dump = el("textarea", { placeholder: "Descarga mental — escreve aqui ideias, links, lembretes…", style: "min-height:110px" });
-    dump.value = los.brainDump || "";
-    let dumpT;
-    dump.addEventListener("input", () => { clearTimeout(dumpT); dumpT = setTimeout(() => Store.update(NS, (s) => { s.brainDump = dump.value; }, { silent: true }), 500); });
-    const dumpCard = el("div", { class: "card" }, [el("strong", { html: "🧠 Descarga mental" }), el("div", { style: "margin-top:10px" }, [dump])]);
-
-    view.appendChild(el("div", { class: "stack" }, [top3, planCard, dumpCard]));
+    view.appendChild(el("div", { class: "stack" }, [top3, weekCalendarCard(), habitsQuickCard()]));
     view.appendChild(el("button", { class: "fab", text: "+", onclick: () => addTask(false), "aria-label": "Nova tarefa" }));
+  }
+
+  /* --------------------- Calendário semanal (Google Calendar) na página Hoje --------------------- */
+  function weekCalendarCard() {
+    const connected = typeof GCal !== "undefined" && GCal.enabled();
+    const card = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [
+        el("strong", { html: "🗓️ Calendário da semana" }),
+        connected ? el("button", { class: "btn btn-soft btn-sm", text: "+ Evento", onclick: newEvent }) : el("button", { class: "btn btn-soft btn-sm", text: "Ligar", onclick: App.openSettings }),
+      ]),
+      el("div", { class: "wk-cal", style: "margin-top:10px" }, [el("div", { class: "empty tiny", text: connected ? "A carregar…" : "" })]),
+    ]);
+    if (connected) loadWeekCal(card.querySelector(".wk-cal"));
+    else card.querySelector(".wk-cal").appendChild(el("div", { class: "empty tiny", html: 'Liga o teu Google Calendar em Definições para veres a semana aqui.' }));
+    return card;
+  }
+  async function loadWeekCal(box) {
+    try {
+      if (!GCal.connected()) {
+        clear(box).appendChild(el("button", { class: "btn btn-primary btn-block", text: "Ligar Google Calendar", onclick: async () => { try { await GCal.connect(true); render("hoje"); } catch (e) { toast(e.message); } } }));
+        return;
+      }
+      const base = new Date(viewDate + "T00:00:00"); const dow = (base.getDay() + 6) % 7;
+      const monday = new Date(base); monday.setDate(base.getDate() - dow); monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 7);
+      const events = await GCal.listEvents(monday.toISOString(), sunday.toISOString());
+      const byDay = {};
+      events.forEach((ev) => { const iso = ev.start.date || (ev.start.dateTime || "").slice(0, 10); (byDay[iso] = byDay[iso] || []).push(ev); });
+      clear(box);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday); d.setDate(monday.getDate() + i); const iso = isoDate(d); const isToday = iso === todayISO();
+        const dayEvents = (byDay[iso] || []).sort((a, b) => (a.start.dateTime || a.start.date || "").localeCompare(b.start.dateTime || b.start.date || ""));
+        const row = el("div", { style: "padding:8px 0;border-bottom:1px solid var(--border)" }, [
+          el("div", { class: "row between" }, [
+            el("div", { style: "font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.06em;" + (isToday ? "color:var(--accent)" : "color:var(--text-soft)"), text: UI.DAYS[d.getDay()].toUpperCase() + " " + d.getDate() }),
+            el("button", { class: "btn btn-ghost btn-sm", style: "padding:2px 9px", text: "+", onclick: () => { viewDate = iso; newEvent(); } }),
+          ]),
+        ]);
+        if (!dayEvents.length) row.appendChild(el("div", { class: "tiny muted", style: "padding:1px 2px", text: "—" }));
+        else dayEvents.forEach((ev) => {
+          const s = ev.start.dateTime ? new Date(ev.start.dateTime) : null;
+          const tm = s ? String(s.getHours()).padStart(2, "0") + ":" + String(s.getMinutes()).padStart(2, "0") : "Dia inteiro";
+          row.appendChild(el("div", { class: "row", style: "gap:10px;padding:3px 0;align-items:center" }, [
+            el("div", { style: "font-family:var(--mono);font-size:.68rem;color:var(--text-soft);min-width:46px", text: tm }),
+            el("div", { style: "flex:1;font-size:.86rem;border-left:3px solid var(--accent);padding-left:8px", text: ev.summary || "(sem título)" }),
+          ]));
+        });
+        box.appendChild(row);
+      }
+    } catch (e) { clear(box).appendChild(el("div", { class: "empty tiny", style: "color:var(--bad)", text: "Erro: " + e.message })); }
+  }
+
+  /* --------------------- Hábitos rápidos na página Hoje --------------------- */
+  function habitsQuickCard() {
+    const los = Store.get(NS); const habits = los.habits || [];
+    const card = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [el("strong", { html: "🔥 Hábitos" }), el("button", { class: "btn btn-ghost btn-sm", text: "Gerir", onclick: () => switchTab("habits") })]),
+    ]);
+    if (!habits.length) { card.appendChild(el("div", { class: "empty tiny", text: "Sem hábitos. Cria-os no separador Hábitos." })); return card; }
+    const list = el("div", { style: "margin-top:6px" });
+    habits.forEach((h) => {
+      const on = !!(los.habitLog && los.habitLog[h.id] && los.habitLog[h.id][viewDate]);
+      list.appendChild(el("div", { class: "item", style: "padding:10px 2px;cursor:pointer", onclick: () => toggleHabit(h.id, viewDate) }, [
+        el("div", { style: `width:24px;height:24px;border-radius:8px;flex:none;border:2px solid ${on ? "var(--good)" : "var(--border-2)"};background:${on ? "var(--good)" : "transparent"};color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem`, html: on ? "✓" : "" }),
+        el("div", { class: "grow t", style: on ? "color:var(--text-mute)" : "", text: h.name }),
+        el("span", { class: "pill" + (D.habitStreak(los, h.id) > 0 ? " on" : ""), text: "🔥 " + D.habitStreak(los, h.id) }),
+      ]));
+    });
+    card.appendChild(list);
+    return card;
   }
 
   /* --------------------- Calendário / navegação de dias --------------------- */
