@@ -329,9 +329,29 @@
       }});
     }));
 
-    const ta = el("textarea", { placeholder: "Escreve sobre o teu dia… O que aconteceu? Como te sentiste? Pelo que estás grato?", style: "min-height:200px;line-height:1.6" });
+    const ta = el("textarea", { placeholder: "Escreve ou dita sobre o teu dia… O que aconteceu? Como te sentiste? Pelo que estás grato?", style: "min-height:200px;line-height:1.6" });
     ta.value = entry.text || "";
     let t; ta.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => Store.update(NS, (s) => { s.journal = s.journal || {}; s.journal[viewDate] = s.journal[viewDate] || {}; s.journal[viewDate].text = ta.value; s.journal[viewDate].at = Date.now(); }, { silent: true }), 500); });
+
+    // Ditado por voz (Web Speech API — grátis, no browser)
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const micBtn = el("button", { class: "btn btn-soft", html: "🎤 Ditar" });
+    let rec = null, recording = false;
+    micBtn.addEventListener("click", () => {
+      if (!SR) return toast("Este browser não suporta ditado por voz. Experimenta o Chrome.");
+      if (recording) { rec && rec.stop(); return; }
+      rec = new SR(); rec.lang = "pt-PT"; rec.continuous = true; rec.interimResults = false;
+      rec.onresult = (e) => {
+        let txt = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) txt += e.results[i][0].transcript;
+        if (txt.trim()) { ta.value += (ta.value && !/\s$/.test(ta.value) ? " " : "") + txt.trim() + " "; ta.dispatchEvent(new Event("input")); }
+      };
+      rec.onend = () => { recording = false; micBtn.classList.replace("btn-primary", "btn-soft"); micBtn.innerHTML = "🎤 Ditar"; };
+      rec.onerror = (ev) => { recording = false; micBtn.classList.replace("btn-primary", "btn-soft"); micBtn.innerHTML = "🎤 Ditar"; toast(ev.error === "not-allowed" ? "Permite o acesso ao microfone." : "Erro no microfone: " + ev.error); };
+      try { rec.start(); recording = true; micBtn.classList.replace("btn-soft", "btn-primary"); micBtn.innerHTML = "⏹️ A gravar…"; toast("A ouvir… fala à vontade."); }
+      catch (e) { toast("Não foi possível iniciar o microfone."); }
+    });
+    const micRow = el("div", { class: "row between", style: "margin:12px 0 6px" }, [el("span", { class: "tiny muted", text: "O teu dia" }), micBtn]);
 
     const prompts = ["O melhor momento de hoje…", "Um desafio que enfrentei…", "Algo por que estou grato…", "O que quero melhorar amanhã…"];
     const promptRow = el("div", { class: "row wrap", style: "gap:6px;margin-top:8px" }, prompts.map((p) => el("button", { class: "pill", text: p, onclick: () => { ta.value += (ta.value ? "\n\n" : "") + p + " "; ta.focus(); ta.dispatchEvent(new Event("input")); } })));
@@ -346,7 +366,7 @@
 
     view.appendChild(UI.dateNav(viewDate, (d) => { viewDate = d; render("journal"); }));
     view.appendChild(el("div", { class: "stack" }, [
-      el("div", { class: "card" }, [el("div", { class: "section-title", style: "margin-top:0", text: "Como te sentes?" }), moodRow, el("div", { style: "margin-top:12px" }, [ta]), promptRow]),
+      el("div", { class: "card" }, [el("div", { class: "section-title", style: "margin-top:0", text: "Como te sentes?" }), moodRow, micRow, ta, promptRow]),
       el("div", { class: "tiny muted center", text: "Guardado automaticamente ✓" }),
       histCard,
     ].filter(Boolean)));

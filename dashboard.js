@@ -9,8 +9,6 @@
   function boot() {
     App.boot({ active: "home" });     // tema + service worker + sync + barra inferior consistente
     $("#settingsBtn").addEventListener("click", App.openSettings);
-    const gymUrl = Store.get("sys").gymUrl || "https://rblucas2.github.io/gymos/";
-    $("#gymLink").href = gymUrl;
     // re-render quando qualquer app muda (sync/edições)
     Store.subscribe("los", render); Store.subscribe("fin", render); Store.subscribe("nut", render);
     tick(); setInterval(tick, 1000);
@@ -20,8 +18,6 @@
   function tick() {
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, "0"), mm = String(now.getMinutes()).padStart(2, "0"), ss = String(now.getSeconds()).padStart(2, "0");
-    const off = -now.getTimezoneOffset() / 60;
-    $("#topmeta").innerHTML = `<span><b>${hh}:${mm}</b><span style="color:var(--text-mute)">:${ss}</span></span> <span>UTC${off >= 0 ? "+" + off : off}</span> <span>${now.toLocaleDateString("pt-PT", { day: "2-digit", month: "short" }).toUpperCase()}</span>`;
     const c = $("#clockNow"); if (c) c.innerHTML = `${hh}:${mm}<span class="s">:${ss}</span>`;
   }
 
