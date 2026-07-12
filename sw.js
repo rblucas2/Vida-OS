@@ -1,5 +1,5 @@
 /* Service worker — app shell offline para a suite Vida OS */
-const VERSION = "vidaos-v20";
+const VERSION = "vidaos-v21";
 const CORE = [
   "./", "./index.html", "./dashboard.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-180.png",
@@ -31,9 +31,11 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== location.origin) return;
 
   // network-first para TUDO (mesma origem): sempre a versão mais recente quando há
-  // internet; usa a cache apenas como fallback offline. Evita ficar preso a versões antigas.
+  // internet; usa a cache apenas como fallback offline. cache:"no-store" ignora a
+  // cache HTTP do próprio browser (o GitHub Pages envia Cache-Control com alguns
+  // minutos de validade), garantindo que "no ar" significa mesmo "no ar já".
   e.respondWith(
-    fetch(req).then((r) => {
+    fetch(req, { cache: "no-store" }).then((r) => {
       if (r && r.ok) { const cp = r.clone(); caches.open(VERSION).then((c) => c.put(req, cp)); }
       return r;
     }).catch(() => caches.match(req).then((m) => m || (req.mode === "navigate" ? caches.match("./index.html") : Response.error())))
