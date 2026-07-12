@@ -78,6 +78,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html { height: 100%; }
 
 body {
   font-family: var(--font);
@@ -85,10 +86,11 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   line-height: 1.45;
-  padding-bottom: env(safe-area-inset-bottom);
   overscroll-behavior-y: none;
   background: var(--bg);
-  min-height: 100vh;
+  /* Coluna de altura total: só o conteúdo scrolla; a tabbar fica fixa fora do scroll */
+  height: 100vh; height: 100dvh;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 /* halo do acento como camada FIXA por trás do conteúdo — evita o bug do
    background-attachment:fixed que fazia a barra inferior "saltar" no telemóvel */
@@ -99,12 +101,14 @@ body::before {
 
 /* ---- Layout / app shell ---- */
 .app {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 0 var(--pad) calc(104px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 780px; margin: 0 auto;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 0 var(--pad) 28px;
 }
 
 .topbar {
+  flex: none;
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px;
   padding: calc(14px + env(safe-area-inset-top)) var(--pad) 12px;
@@ -232,14 +236,11 @@ input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--a
 
 /* ---- Bottom navigation ---- */
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  flex: 0 0 auto; z-index: 30;
   display: flex; justify-content: center; gap: 4px;
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
   background: var(--surface);
   border-top: 1px solid var(--border);
-}
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .tabbar { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
 }
 .tabbar a {
   flex: 1; max-width: 120px; text-decoration: none; color: var(--text-mute);
