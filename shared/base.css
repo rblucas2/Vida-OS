@@ -87,12 +87,14 @@ body {
   line-height: 1.45;
   padding-bottom: env(safe-area-inset-bottom);
   overscroll-behavior-y: none;
-  /* fundo com leve halo do acento no topo → dá identidade sem ruído */
-  background:
-    radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--accent) 12%, var(--bg)) 0%, var(--bg) 46%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   min-height: 100vh;
+}
+/* halo do acento como camada FIXA por trás do conteúdo — evita o bug do
+   background-attachment:fixed que fazia a barra inferior "saltar" no telemóvel */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--accent) 12%, var(--bg)) 0%, var(--bg) 46%);
 }
 
 /* ---- Layout / app shell ---- */
@@ -233,9 +235,11 @@ input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--a
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   display: flex; justify-content: center; gap: 4px;
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  background: var(--surface);
   border-top: 1px solid var(--border);
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tabbar { background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
 }
 .tabbar a {
   flex: 1; max-width: 120px; text-decoration: none; color: var(--text-mute);
