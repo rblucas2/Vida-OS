@@ -78,7 +78,13 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-html { height: 100%; }
+html {
+  height: 100%;
+  /* Impede que Safari/Chrome no telemóvel "ampliem" automaticamente o texto
+     em layouts de coluna — é a causa mais comum da app parecer ampliada ao abrir. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 body {
   font-family: var(--font);
