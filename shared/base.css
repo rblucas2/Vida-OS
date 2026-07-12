@@ -109,7 +109,7 @@ body::before {
 .app {
   width: 100%; max-width: 780px; margin: 0 auto;
   flex: 1 1 auto; min-height: 0;
-  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
   padding: 0 var(--pad) 28px;
 }
 
@@ -257,9 +257,20 @@ input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--a
 .tabbar a svg { width: 22px; height: 22px; }
 .tabbar a.active { color: var(--accent); background: var(--accent-soft); }
 
-/* ---- Tabs (segmented) ---- */
-.seg { display:flex; background: var(--surface-2); border:1px solid var(--border); border-radius: 99px; padding: 4px; gap: 2px; }
-.seg button { flex:1; border:0; background: transparent; color: var(--text-soft); border-radius: 99px; padding: 9px 10px; font-size:.85rem; font-weight: 650; }
+/* ---- Tabs (segmented) ----
+   Scrolla horizontalmente DENTRO de si própria quando há muitos separadores,
+   em vez de forçar a página inteira a ficar mais larga (o que a tornava "não-clean"). */
+.seg {
+  display: flex; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 99px; padding: 4px; gap: 2px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
+.seg button {
+  flex: 1 0 auto; min-width: max-content; white-space: nowrap;
+  border: 0; background: transparent; color: var(--text-soft);
+  border-radius: 99px; padding: 9px 14px; font-size: .85rem; font-weight: 650;
+}
 .seg button.active { background: var(--surface); color: var(--accent); box-shadow: var(--sh-1); }
 
 /* ---- Modal / sheet ---- */
