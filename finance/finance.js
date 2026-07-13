@@ -84,6 +84,8 @@
       kpiCard("Despesas", eur(s.expense), "var(--bad)", "↓"),
     ]);
 
+    const balCard = sourceBalancesCard();
+
     // Evolução mensal (receitas vs despesas) — 6 meses
     const series = monthlySeries(fin, viewMonth, 6);
     const maxV = Math.max(1, ...series.map((m) => Math.max(m.income, m.expense)));
@@ -152,11 +154,29 @@
     ]);
 
     view.appendChild(monthNav(() => render("resumo")));
-    view.appendChild(el("div", { class: "stack" }, [hero, kpis, chartCard, splitCard, trendCard, cumCard, topCard].filter(Boolean)));
+    view.appendChild(el("div", { class: "stack" }, [hero, kpis, balCard, chartCard, splitCard, trendCard, cumCard, topCard].filter(Boolean)));
   }
 
   function kpiCard(k, v, color, arrow) { return el("div", { class: "card kpi pad-sm" }, [el("div", { class: "k", text: k }), el("div", { class: "v num", style: "color:" + color, text: (arrow ? arrow + " " : "") + v })]); }
   function barColored(pct, color) { const b = bar(Math.min(100, pct)); b.firstChild.style.background = color; b.style.marginTop = "6px"; return b; }
+
+  /** Card "Saldo por método de pagamento" — quanto dinheiro há em cada fonte (dinheiro, cartões, contas…). */
+  function sourceBalancesCard() {
+    const fin = Store.get(NS);
+    const { list, total } = D.sourceBalances(fin);
+    const card = el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [el("strong", { text: "Saldo por método de pagamento" }), el("span", { class: "tiny muted", text: "total " + eur0(total) })]),
+    ]);
+    if (!list.length) { card.appendChild(el("div", { class: "empty tiny", text: "Sem fontes de pagamento ainda." })); return card; }
+    const rows = el("div", { class: "list", style: "margin-top:6px" });
+    list.sort((a, b) => b.balance - a.balance).forEach((src) => rows.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => { const s = (fin.sources || []).find((x) => x.name === src.name); editSource(s || null, src.name); } }, [
+      el("div", { class: "grow t", text: src.name }),
+      el("div", { class: "amt", style: "color:" + (src.balance < 0 ? "var(--bad)" : "var(--text)"), text: eur(src.balance) }),
+    ])));
+    card.appendChild(rows);
+    card.appendChild(el("button", { class: "btn btn-ghost btn-block btn-sm", style: "margin-top:6px", html: "💳 Gerir fontes", onclick: manageSources }));
+    return card;
+  }
 
   /* ----------------------------- TRANSAÇÕES ----------------------------- */
   function renderTx(view) {
@@ -216,15 +236,14 @@
     const fDesc = field("Descrição", { value: t.desc, placeholder: "ex: Almoço, Ordenado…" });
     const fCat = field("Categoria", { value: t.category, list: "catlist" });
     const dl = el("datalist", { id: "catlist" }, catNames().map((c) => el("option", { value: c })));
-    const fAcc = field("Fonte de pagamento", { value: t.account || "", list: "srclist", placeholder: "Dinheiro, Cartão…" });
-    const dlS = el("datalist", { id: "srclist" }, sourceNames().map((c) => el("option", { value: c })));
+    const fAcc = sourceField(t.account);
     fDesc.input.addEventListener("blur", () => { if (!fCat.input.value || fCat.input.value === "Outros") fCat.input.value = D.categorize(fDesc.input.value, fin.categoryRules); });
 
     const catRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fCat]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir categorias", onclick: () => manageCategories() })]);
     const srcRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fAcc]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir fontes", onclick: () => manageSources() })]);
 
     const body = [
-      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, dl, srcRow, dlS,
+      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, dl, srcRow,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(t)); Store.update(NS, (s) => { s.transactions = s.transactions.filter((x) => x.id !== t.id); }); sh.close(); undo("Transação apagada", () => Store.update(NS, (s) => { s.transactions.push(snap); })); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
@@ -264,6 +283,37 @@
   function catNames() { const c = Store.get(NS).categories || []; const set = new Set(c.map((x) => x.name)); Store.get(NS).transactions.forEach((t) => t.category && set.add(t.category)); return [...set]; }
   function uniqueCats() { return catNames(); }
   function sourceNames() { return (Store.get(NS).sources || []).map((s) => s.name); }
+
+  /** Campo "Fonte de pagamento" — select com as fontes existentes + opção para criar uma nova.
+      Substitui o antigo input+datalist, que não abre nenhuma sugestão em Safari/iOS (bug reportado). */
+  function sourceField(value) {
+    const names = sourceNames();
+    const opts = names.map((n) => ({ value: n, label: n }));
+    if (value && !names.includes(value)) opts.unshift({ value, label: value });
+    opts.push({ value: "__new__", label: "+ Nova fonte…" });
+    const f = field("Fonte de pagamento", { type: "select", value: value || names[0] || "", options: opts });
+    f.input.addEventListener("change", () => {
+      if (f.input.value !== "__new__") return;
+      const prev = value || names[0] || "";
+      quickAddSource((name) => {
+        const opt = el("option", { value: name }, name);
+        f.input.insertBefore(opt, f.input.lastElementChild);
+        f.input.value = name;
+      }, () => { f.input.value = prev; });
+    });
+    return f;
+  }
+  function quickAddSource(onDone, onCancel) {
+    let saved = false;
+    const fn = field("Nome da nova fonte", { placeholder: "ex: Cartão Revolut" });
+    const fb = field("Saldo inicial (€, opcional)", { type: "number", inputmode: "decimal", step: "0.01" });
+    const sh2 = sheet("Nova fonte de pagamento", [fn, fb, el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+      const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
+      Store.update(NS, (s) => { s.sources = s.sources || []; if (!s.sources.some((x) => x.name === name)) s.sources.push({ id: uid(), name, opening: parseFloat(fb.input.value) || 0 }); });
+      saved = true;
+      sh2.close(); toast("Fonte criada ✓"); onDone(name);
+    }})], { onClose: () => { if (!saved && onCancel) onCancel(); } });
+  }
   function essentialSet() { const c = Store.get(NS).categories || []; const s = c.filter((x) => x.group === "essential").map((x) => x.name); return s.length ? s : Domain.ESSENTIAL_CATS; }
   function catGroup(name) { const c = (Store.get(NS).categories || []).find((x) => x.name === name); return c ? c.group : (Domain.ESSENTIAL_CATS.includes(name) ? "essential" : "lifestyle"); }
 
@@ -301,24 +351,29 @@
   }
   function manageSources() {
     const fin = Store.get(NS);
+    const { list: bals } = D.sourceBalances(fin);
+    const balOf = (name) => { const b = bals.find((x) => x.name === name); return b ? b.balance : 0; };
     const list = el("div", { class: "list" });
     (fin.sources || []).forEach((src) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editSource(src) }, [
-      el("div", { class: "grow t", text: src.name }), el("span", { class: "tiny muted", text: "✎" }),
+      el("div", { class: "grow t", text: src.name }),
+      el("span", { class: "tiny num", style: "color:" + (balOf(src.name) < 0 ? "var(--bad)" : "var(--text-mute)"), text: eur(balOf(src.name)) }),
     ])));
     sheet("Fontes de pagamento", [
       el("p", { class: "tiny muted", text: "Onde entra/sai o dinheiro: dinheiro, cartões, MBWay, contas…" }),
       list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova fonte", onclick: () => editSource(null) }),
     ]);
   }
-  function editSource(src) {
+  function editSource(src, presetName) {
     const isNew = !src; const old = src ? src.name : "";
-    src = src || { id: uid(), name: "" };
+    src = src || { id: uid(), name: presetName || "", opening: 0 };
     const fn = field("Nome", { value: src.name, placeholder: "ex: Cartão Revolut" });
-    const sh = sheet(isNew ? "Nova fonte" : "Editar fonte", [fn, el("div", { class: "row", style: "gap:10px" }, [
+    const fb = field("Saldo inicial (€)", { type: "number", value: src.opening || "", inputmode: "decimal", step: "0.01" });
+    const sh = sheet(isNew ? "Nova fonte" : "Editar fonte", [fn, fb, el("p", { class: "tiny muted", text: "O saldo inicial soma às receitas e subtrai às despesas registadas nesta fonte para calcular o saldo atual." }), el("div", { class: "row", style: "gap:10px" }, [
       !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.sources = s.sources.filter((x) => x.id !== src.id); }); sh.close(); manageSources(); } }) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
         const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
-        Store.update(NS, (s) => { const i = s.sources.findIndex((x) => x.id === src.id); if (i >= 0) { s.sources[i].name = name; if (old !== name) s.transactions.forEach((t) => { if (t.account === old) t.account = name; }); } else s.sources.push({ id: src.id, name }); });
+        const opening = parseFloat(fb.input.value) || 0;
+        Store.update(NS, (s) => { const i = s.sources.findIndex((x) => x.id === src.id); if (i >= 0) { s.sources[i].name = name; s.sources[i].opening = opening; if (old !== name) s.transactions.forEach((t) => { if (t.account === old) t.account = name; }); } else s.sources.push({ id: src.id, name, opening }); });
         sh.close(); manageSources();
       }}),
     ])]);
@@ -381,10 +436,9 @@
     const fDesc = field("Descrição", { value: r.desc, placeholder: "ex: Renda, Ordenado, Netflix…" });
     const fCat = field("Categoria", { value: r.category, list: "rcats" });
     const dl = el("datalist", { id: "rcats" }, catNames().map((c) => el("option", { value: c })));
-    const fSrc = field("Fonte de pagamento", { value: r.account || sourceNames()[0] || "", list: "rsrc" });
-    const dlS = el("datalist", { id: "rsrc" }, sourceNames().map((c) => el("option", { value: c })));
+    const fSrc = sourceField(r.account || sourceNames()[0] || "");
     const sh = sheet(isNew ? "Novo recorrente" : "Editar recorrente", [
-      fType, el("div", { class: "input-row" }, [fAmount, fDay]), fDesc, fCat, dl, fSrc, dlS,
+      fType, el("div", { class: "input-row" }, [fAmount, fDay]), fDesc, fCat, dl, fSrc,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.recurring = s.recurring.filter((x) => x.id !== r.id); }); sh.close(); manageRecurring(); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {

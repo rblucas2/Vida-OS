@@ -181,6 +181,27 @@
     return { assets, liab, net: assets - liab };
   }
 
+  /** Saldo atual por método de pagamento (fonte): saldo inicial + receitas − despesas nessa fonte.
+      Transferências são ignoradas (não há modelo de conta origem/destino). */
+  function sourceBalances(fin) {
+    const sources = fin.sources || [];
+    const balances = {};
+    sources.forEach((s) => { balances[s.name] = s.opening || 0; });
+    (fin.transactions || []).forEach((t) => {
+      if (t.type === "transfer") return;
+      const acc = t.account || "Outros";
+      balances[acc] = (balances[acc] || 0) + (t.type === "income" ? t.amount : -t.amount);
+    });
+    const known = new Set(sources.map((s) => s.name));
+    const extra = Object.keys(balances).filter((n) => !known.has(n));
+    const list = [
+      ...sources.map((s) => ({ id: s.id, name: s.name, balance: balances[s.name] || 0 })),
+      ...extra.map((n) => ({ id: null, name: n, balance: balances[n] })),
+    ];
+    const total = list.reduce((a, x) => a + x.balance, 0);
+    return { list, total };
+  }
+
   function isEssential(cat) { return ESSENTIAL_CATS.includes(cat); }
 
   /* ---------------- HÁBITOS (Life OS) ---------------- */
@@ -204,7 +225,7 @@
   global.Domain = {
     ACTIVITY, DEFAULT_RULES, ESSENTIAL_CATS, MICRO_REF,
     mifflin, nutritionTargets, baseTargets, effectiveTargets, workoutDone, dayIntake, nutritionSummary,
-    categorize, financeSummary, netWorth, isEssential, txInMonth,
+    categorize, financeSummary, netWorth, sourceBalances, isEssential, txInMonth,
     habitStreak, gymStreak,
     gymState, gymLog, gymConnected, gymWorkoutDone, gymWeekCount, gymLastSession,
   };
