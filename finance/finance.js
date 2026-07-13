@@ -169,7 +169,7 @@
     ]);
     if (!list.length) { card.appendChild(el("div", { class: "empty tiny", text: "Sem fontes de pagamento ainda." })); return card; }
     const rows = el("div", { class: "list", style: "margin-top:6px" });
-    list.sort((a, b) => b.balance - a.balance).forEach((src) => rows.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => { const s = (fin.sources || []).find((x) => x.name === src.name); editSource(s || null, src.name); } }, [
+    list.sort((a, b) => b.balance - a.balance).forEach((src) => rows.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => { const s = (fin.sources || []).find((x) => x.name === src.name); editSource(s || null, { presetName: src.name }); } }, [
       el("div", { class: "grow t", text: src.name }),
       el("div", { class: "amt", style: "color:" + (src.balance < 0 ? "var(--bad)" : "var(--text)"), text: eur(src.balance) }),
     ])));
@@ -322,22 +322,26 @@
     const fin = Store.get(NS);
     const list = el("div", { class: "list" });
     const GROUPS = { essential: "Essencial", lifestyle: "Estilo de vida", income: "Receita" };
-    (fin.categories || []).forEach((c) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editCategory(c) }, [
+    (fin.categories || []).forEach((c) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editCategory(c, sh) }, [
       el("div", { class: "grow" }, [el("div", { class: "t", text: c.name }), el("div", { class: "s", text: GROUPS[c.group] || c.group })]),
       el("span", { class: "pill" + (c.group === "essential" ? " on" : ""), text: GROUPS[c.group] }),
     ])));
-    sheet("Categorias", [
+    const sh = sheet("Categorias", [
       el("p", { class: "tiny muted", text: "Organiza as tuas despesas e receitas. 'Essencial' vs 'Estilo de vida' alimenta os gráficos." }),
-      list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova categoria", onclick: () => editCategory(null) }),
+      list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova categoria", onclick: () => editCategory(null, sh) }),
     ]);
+    return sh;
   }
-  function editCategory(c) {
+  // parentSheet: sheet de onde foi aberto (a lista "Categorias"). Fechamo-lo ao guardar/apagar
+  // para não empilhar folhas por cima umas das outras (bug: era preciso "andar para trás" várias vezes).
+  function editCategory(c, parentSheet) {
     const isNew = !c; const old = c ? c.name : "";
     c = c || { name: "", group: "lifestyle" };
     const fn = field("Nome", { value: c.name, placeholder: "ex: Viagens" });
     const fg = field("Grupo", { type: "select", value: c.group, options: [{ value: "essential", label: "Essencial" }, { value: "lifestyle", label: "Estilo de vida" }, { value: "income", label: "Receita" }] });
+    const back = () => { sh.close(); if (parentSheet) { parentSheet.close(); manageCategories(); } };
     const sh = sheet(isNew ? "Nova categoria" : "Editar categoria", [fn, fg, el("div", { class: "row", style: "gap:10px" }, [
-      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.categories = s.categories.filter((x) => x.name !== old); }); sh.close(); manageCategories(); } }) : null,
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.categories = s.categories.filter((x) => x.name !== old); }); back(); } }) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
         const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
         Store.update(NS, (s) => {
@@ -345,7 +349,7 @@
           if (i >= 0) { s.categories[i] = { name, group: fg.input.value }; if (old !== name) s.transactions.forEach((t) => { if (t.category === old) t.category = name; }); }
           else s.categories.push({ name, group: fg.input.value });
         });
-        sh.close(); manageCategories();
+        back();
       }}),
     ])]);
   }
@@ -354,27 +358,33 @@
     const { list: bals } = D.sourceBalances(fin);
     const balOf = (name) => { const b = bals.find((x) => x.name === name); return b ? b.balance : 0; };
     const list = el("div", { class: "list" });
-    (fin.sources || []).forEach((src) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editSource(src) }, [
+    (fin.sources || []).forEach((src) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editSource(src, { parentSheet: sh }) }, [
       el("div", { class: "grow t", text: src.name }),
       el("span", { class: "tiny num", style: "color:" + (balOf(src.name) < 0 ? "var(--bad)" : "var(--text-mute)"), text: eur(balOf(src.name)) }),
     ])));
-    sheet("Fontes de pagamento", [
+    const sh = sheet("Fontes de pagamento", [
       el("p", { class: "tiny muted", text: "Onde entra/sai o dinheiro: dinheiro, cartões, MBWay, contas…" }),
-      list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova fonte", onclick: () => editSource(null) }),
+      list, el("button", { class: "btn btn-primary btn-block", text: "+ Nova fonte", onclick: () => editSource(null, { parentSheet: sh }) }),
     ]);
+    return sh;
   }
-  function editSource(src, presetName) {
+  // opts.parentSheet: fecha a lista "Fontes" ao guardar/apagar em vez de empilhar uma folha nova por cima
+  // (era o bug reportado: ao editar vários saldos seguidos tinhas de "andar para trás" várias vezes para sair).
+  // opts.presetName: nome pré-preenchido quando aberto a partir do cartão de saldos no Resumo.
+  function editSource(src, opts = {}) {
+    const { presetName, parentSheet } = opts;
     const isNew = !src; const old = src ? src.name : "";
     src = src || { id: uid(), name: presetName || "", opening: 0 };
     const fn = field("Nome", { value: src.name, placeholder: "ex: Cartão Revolut" });
     const fb = field("Saldo inicial (€)", { type: "number", value: src.opening || "", inputmode: "decimal", step: "0.01" });
+    const back = () => { sh.close(); if (parentSheet) { parentSheet.close(); manageSources(); } };
     const sh = sheet(isNew ? "Nova fonte" : "Editar fonte", [fn, fb, el("p", { class: "tiny muted", text: "O saldo inicial soma às receitas e subtrai às despesas registadas nesta fonte para calcular o saldo atual." }), el("div", { class: "row", style: "gap:10px" }, [
-      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.sources = s.sources.filter((x) => x.id !== src.id); }); sh.close(); manageSources(); } }) : null,
+      !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.sources = s.sources.filter((x) => x.id !== src.id); }); back(); } }) : null,
       el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
         const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
         const opening = parseFloat(fb.input.value) || 0;
         Store.update(NS, (s) => { const i = s.sources.findIndex((x) => x.id === src.id); if (i >= 0) { s.sources[i].name = name; s.sources[i].opening = opening; if (old !== name) s.transactions.forEach((t) => { if (t.account === old) t.account = name; }); } else s.sources.push({ id: src.id, name, opening }); });
-        sh.close(); manageSources();
+        back();
       }}),
     ])]);
   }
@@ -417,17 +427,19 @@
     const fin = Store.get(NS);
     const list = el("div", { class: "list" });
     if (!fin.recurring.length) list.appendChild(el("div", { class: "empty tiny", text: "Sem movimentos recorrentes." }));
-    fin.recurring.forEach((r) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editRecurring(r) }, [
+    fin.recurring.forEach((r) => list.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => editRecurring(r, sh) }, [
       el("div", { class: "grow" }, [el("div", { class: "t", text: r.desc }), el("div", { class: "s", text: `${r.type === "income" ? "Receita" : "Despesa"} · dia ${r.day} · ${r.category}` })]),
       el("div", { class: "amt", style: r.type === "income" ? "color:var(--good)" : "", text: (r.type === "income" ? "+" : "−") + eur(r.amount).replace("€", "") + "€" }),
     ])));
-    sheet("Movimentos recorrentes", [
+    const sh = sheet("Movimentos recorrentes", [
       el("p", { class: "tiny muted", text: "Renda, ordenado, subscrições… lançados automaticamente todos os meses." }),
       list,
-      el("button", { class: "btn btn-primary btn-block", text: "+ Novo recorrente", onclick: () => editRecurring(null) }),
+      el("button", { class: "btn btn-primary btn-block", text: "+ Novo recorrente", onclick: () => editRecurring(null, sh) }),
     ]);
+    return sh;
   }
-  function editRecurring(r) {
+  // parentSheet: fecha a lista "Movimentos recorrentes" ao guardar/apagar em vez de empilhar folhas.
+  function editRecurring(r, parentSheet) {
     const isNew = !r;
     r = r || { id: uid(), desc: "", amount: "", type: "expense", category: "Outros", account: "Recorrente", day: 1, active: true, since: monthKey() };
     const fType = field("Tipo", { type: "select", value: r.type, options: [{ value: "expense", label: "Despesa" }, { value: "income", label: "Receita" }] });
@@ -437,15 +449,16 @@
     const fCat = field("Categoria", { value: r.category, list: "rcats" });
     const dl = el("datalist", { id: "rcats" }, catNames().map((c) => el("option", { value: c })));
     const fSrc = sourceField(r.account || sourceNames()[0] || "");
+    const back = () => { sh.close(); if (parentSheet) { parentSheet.close(); manageRecurring(); } };
     const sh = sheet(isNew ? "Novo recorrente" : "Editar recorrente", [
       fType, el("div", { class: "input-row" }, [fAmount, fDay]), fDesc, fCat, dl, fSrc,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
-        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.recurring = s.recurring.filter((x) => x.id !== r.id); }); sh.close(); manageRecurring(); } }) : null,
+        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.recurring = s.recurring.filter((x) => x.id !== r.id); }); back(); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
           const data = { ...r, desc: fDesc.input.value.trim() || "Recorrente", amount: Math.abs(parseFloat(fAmount.input.value) || 0), type: fType.input.value, category: fCat.input.value.trim() || "Outros", account: fSrc.input.value.trim() || "Dinheiro", day: Math.min(28, Math.max(1, parseInt(fDay.input.value) || 1)) };
           if (!data.amount) return toast("Indica um valor.");
           Store.update(NS, (s) => { const i = s.recurring.findIndex((x) => x.id === data.id); if (i >= 0) s.recurring[i] = data; else s.recurring.push(data); });
-          applyRecurring(); sh.close(); toast("Guardado ✓");
+          applyRecurring(); toast("Guardado ✓"); back();
         }}),
       ]),
     ]);
