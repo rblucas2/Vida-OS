@@ -613,7 +613,8 @@
   }
 
   /* ----------------------------- PLANO SEMANAL ----------------------------- */
-  let planDay = PLAN_DAYS.find((d) => d.g === new Date().getDay()).id;
+  function todayPlanDay() { return PLAN_DAYS.find((d) => d.g === new Date().getDay()).id; }
+  let planDay = todayPlanDay();
   function renderPlano(view) {
     const nut = Store.get(NS);
     $("#subtitle").textContent = "Plano de alimentação semanal";
@@ -653,21 +654,33 @@
       if (!entries.length) card.appendChild(el("div", { class: "tiny muted", style: "padding:6px 2px", text: "—" }));
       else { const list = el("div", { class: "list" }); entries.forEach((e, i) => list.appendChild(el("div", { class: "item", style: "padding:9px 2px" }, [
         el("div", { class: "grow" }, [el("div", { class: "t", text: e.nome }), e.kcal ? el("div", { class: "s", text: `${num(e.kcal)} kcal · ${num(e.p)}P ${num(e.c)}C ${num(e.f)}G` }) : el("div", { class: "s", text: "nota" })]),
-        el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => { Store.update(NS, (s) => { s.mealPlan[planDay][sl.id].splice(i, 1); }); } }),
+        el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => {
+          const removed = entries[i];
+          Store.update(NS, (s) => {
+            s.mealPlan[planDay][sl.id].splice(i, 1);
+            // este dia é hoje → desfaz também a sincronização no diário
+            if (planDay === todayPlanDay() && removed && removed.id) {
+              s.diary[todayISO()] = (s.diary[todayISO()] || []).filter((d) => d.planRef !== removed.id);
+            }
+          });
+        }}),
       ]))); card.appendChild(list); }
       return card;
     });
 
-    const copyBtn = el("button", { class: "btn btn-primary btn-block", text: "↳ Copiar este dia para o diário de hoje", onclick: () => {
-      const entries = [];
-      PLAN_SLOTS.forEach((sl) => (dayPlan[sl.id] || []).forEach((e) => { if (e.kcal) entries.push(e); }));
-      if (!entries.length) return toast("Nada com macros para copiar.");
-      Store.update(NS, (s) => { s.diary[todayISO()] = s.diary[todayISO()] || []; entries.forEach((e) => s.diary[todayISO()].push({ id: uid(), foodId: e.foodId, nome: e.nome, grams: e.grams || 0, kcal: e.kcal, p: e.p, c: e.c, f: e.f })); });
-      toast(entries.length + " itens no diário de hoje ✓");
-    }});
+    const isToday = planDay === todayPlanDay();
+    const syncNote = isToday
+      ? el("p", { class: "tiny", style: "color:var(--good);text-align:center;font-weight:600", text: "🔄 Este dia sincroniza automaticamente com o Diário de hoje." })
+      : el("button", { class: "btn btn-primary btn-block", text: "↳ Copiar este dia para o diário de hoje", onclick: () => {
+          const entries = [];
+          PLAN_SLOTS.forEach((sl) => (dayPlan[sl.id] || []).forEach((e) => { if (e.kcal) entries.push(e); }));
+          if (!entries.length) return toast("Nada com macros para copiar.");
+          Store.update(NS, (s) => { s.diary[todayISO()] = s.diary[todayISO()] || []; entries.forEach((e) => s.diary[todayISO()].push({ id: uid(), foodId: e.foodId, nome: e.nome, grams: e.grams || 0, kcal: e.kcal, p: e.p, c: e.c, f: e.f })); });
+          toast(entries.length + " itens no diário de hoje ✓");
+        }});
 
-    view.appendChild(el("div", { class: "stack" }, [sel, totCard, ...slots, copyBtn,
-      el("p", { class: "tiny muted center", text: "O plano é um modelo semanal reutilizável. Copia um dia para o diário quando o quiseres registar." })]));
+    view.appendChild(el("div", { class: "stack" }, [sel, totCard, ...slots, syncNote,
+      el("p", { class: "tiny muted center", text: isToday ? "Adiciona ou remove aqui e o Diário de hoje atualiza-se sozinho." : "O plano é um modelo semanal reutilizável. Copia um dia para o diário quando o quiseres registar." })]));
   }
 
   function addPlanEntry(dayId, slotId) {
@@ -680,7 +693,19 @@
     const body = el("div", {});
     let mode = "meal";
     function switchSub(e, m) { mode = m; [...seg.children].forEach((c) => c.classList.toggle("active", c === e.target)); drawBody(); }
-    function push(entry) { Store.update(NS, (s) => { s.mealPlan[dayId] = s.mealPlan[dayId] || {}; s.mealPlan[dayId][slotId] = s.mealPlan[dayId][slotId] || []; s.mealPlan[dayId][slotId].push(entry); }); sh.close(); toast("Adicionado ✓"); }
+    function push(entry) {
+      entry.id = entry.id || uid();
+      Store.update(NS, (s) => {
+        s.mealPlan[dayId] = s.mealPlan[dayId] || {}; s.mealPlan[dayId][slotId] = s.mealPlan[dayId][slotId] || [];
+        s.mealPlan[dayId][slotId].push(entry);
+        // este dia é hoje → sincroniza logo com o diário de hoje, sem precisar de "Copiar"
+        if (dayId === todayPlanDay() && entry.kcal) {
+          s.diary[todayISO()] = s.diary[todayISO()] || [];
+          s.diary[todayISO()].push({ id: uid(), planRef: entry.id, foodId: entry.foodId, nome: entry.nome, grams: entry.grams || 0, kcal: entry.kcal, p: entry.p || 0, c: entry.c || 0, f: entry.f || 0 });
+        }
+      });
+      sh.close(); toast("Adicionado ✓");
+    }
     function drawBody() {
       clear(body);
       if (mode === "meal") {
