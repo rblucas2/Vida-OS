@@ -783,12 +783,14 @@
           ctorOpts.formatsToSupport = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE];
         }
         const q = new Html5Qrcode("qr-reader", ctorOpts); window.__qr = q;
-        // Pede vídeo em alta resolução (barras finas de um EAN precisam de detalhe) e uma
-        // caixa de deteção PROPORCIONAL ao vídeo real (uma caixa fixa em px podia ficar
-        // maior do que o vídeo em ecrãs pequenos, impedindo a deteção por completo).
-        const videoConstraints = { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } };
+        // 1º argumento: só a seleção da câmara (tem de ser simples, ex. {facingMode}).
+        // A resolução alta (barras finas de um EAN precisam de detalhe) vai dentro de
+        // "videoConstraints", no 2º argumento — não no 1º, que rejeita chaves extra.
         const qrboxFn = (vw, vh) => { const w = Math.floor(Math.min(vw, vh) * 0.85); return { width: w, height: Math.floor(w * 0.55) }; };
-        q.start(videoConstraints, { fps: 15, qrbox: qrboxFn, aspectRatio: 1.777 },
+        q.start({ facingMode: "environment" }, {
+          fps: 15, qrbox: qrboxFn, aspectRatio: 1.777,
+          videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+        },
           (txt) => { q.stop().then(() => lookup(txt)).catch(() => lookup(txt)); },
           () => {}).then(() => status.textContent = "Aponta ao código de barras — mantém firme, bem iluminado e a uns 10-15cm.")
           .catch((err) => {
