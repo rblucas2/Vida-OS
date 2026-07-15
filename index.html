@@ -19,8 +19,8 @@
     .wrap{ width:100%; max-width: 1240px; margin:0 auto; flex:1 1 auto; padding: 0 16px 28px; }
     @media(max-width:759px){ .navpills{ display:none } }
 
-    /* Top bar */
-    .osbar{ display:flex; align-items:center; gap:14px; padding:16px 4px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
+    /* Top bar — filho direto do body, tal como .topbar nas outras apps */
+    .osbar{ flex:none; display:flex; align-items:center; gap:14px; padding:16px 4px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
       background: color-mix(in srgb, var(--bg) 80%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); flex-wrap:wrap; }
     .osbar .brand{ font-family:var(--mono); font-weight:700; letter-spacing:.12em; font-size:.82rem; display:flex; align-items:center; gap:8px; }
     .osbar .brand .glow{ width:9px;height:9px;border-radius:50%;background:var(--accent-grad); box-shadow:0 0 10px var(--accent); }
@@ -87,16 +87,16 @@
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="osbar">
-      <div class="brand"><span class="glow"></span> VIDA OS <span style="color:var(--text-mute)">// v1</span></div>
-      <div class="spacer"></div>
-      <button class="btn btn-icon btn-ghost" id="settingsBtn" aria-label="Definições" style="width:34px;height:34px">
-        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5 2 2 0 1 1-4 0 1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3 2 2 0 1 1-2.8-2.8 1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1 2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9 2 2 0 1 1 2.8-2.8 1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5 2 2 0 1 1 4 0 1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3 2 2 0 1 1 2.8 2.8 1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1 2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.5 1z"/></svg>
-      </button>
-    </header>
+  <header class="osbar">
+    <div class="brand"><span class="glow"></span> VIDA OS <span style="color:var(--text-mute)">// v1</span></div>
+    <div class="spacer"></div>
+    <button class="btn btn-icon btn-ghost" id="settingsBtn" aria-label="Definições" style="width:34px;height:34px">
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.8 2.8 1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5 2 2 0 1 1-4 0 1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3 2 2 0 1 1-2.8-2.8 1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1 2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9 2 2 0 1 1 2.8-2.8 1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5 2 2 0 1 1 4 0 1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3 2 2 0 1 1 2.8 2.8 1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1 2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+  <main class="wrap">
     <div class="dash" id="dash"></div>
-  </div>
+  </main>
 
   <script src="./shared/ui.js"></script>
   <script src="./shared/store.js"></script>

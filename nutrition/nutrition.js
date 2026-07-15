@@ -774,11 +774,24 @@
     }
     function startCam() {
       try {
-        const q = new Html5Qrcode("qr-reader"); window.__qr = q;
-        q.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 160 } },
-          (txt) => { q.stop().then(() => lookup(txt)); },
-          () => {}).then(() => status.textContent = "Aponta ao código de barras.")
-          .catch(() => status.textContent = "Sem acesso à câmara. Usa o código manual.");
+        // Configuração dedicada a códigos de barras (EAN/UPC dos produtos alimentares),
+        // não só QR codes — e usa o descodificador nativo do telemóvel quando disponível
+        // (muito mais rápido e fiável do que o descodificador em JavaScript).
+        const ctorOpts = { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } };
+        if (window.Html5QrcodeSupportedFormats) {
+          const F = window.Html5QrcodeSupportedFormats;
+          ctorOpts.formatsToSupport = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE];
+        }
+        const q = new Html5Qrcode("qr-reader", ctorOpts); window.__qr = q;
+        q.start({ facingMode: "environment" }, { fps: 12, qrbox: { width: 280, height: 130 }, aspectRatio: 1.6 },
+          (txt) => { q.stop().then(() => lookup(txt)).catch(() => lookup(txt)); },
+          () => {}).then(() => status.textContent = "Aponta ao código de barras — mantém firme e bem iluminado.")
+          .catch((err) => {
+            const msg = String(err || "");
+            if (/NotAllowedError|Permission/i.test(msg)) status.textContent = "Sem permissão para a câmara. Autoriza o acesso nas definições do browser e tenta outra vez.";
+            else if (/NotFoundError/i.test(msg)) status.textContent = "Não foi encontrada nenhuma câmara. Usa o código manual.";
+            else status.textContent = "Não foi possível abrir a câmara. Usa o código manual.";
+          });
       } catch (e) { status.textContent = "Scanner indisponível. Usa o código manual."; }
     }
   }
