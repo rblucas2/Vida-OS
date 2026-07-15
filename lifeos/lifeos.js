@@ -420,7 +420,7 @@
   function renderHabits(view) {
     const los = Store.get(NS);
     $("#subtitle").textContent = "Rastreador de hábitos";
-    const N = 14; // últimos 14 dias
+    const N = 7; // última semana — cabe sem precisar de deslizar, e hoje fica sempre à direita
     const days = [];
     for (let i = N - 1; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); days.push(d); }
 
@@ -429,10 +429,12 @@
     los.habits.forEach((h) => {
       const log = (los.habitLog && los.habitLog[h.id]) || {};
       const streak = D.habitStreak(los, h.id);
-      const grid = el("div", { class: "row", style: "gap:4px;margin-top:10px;flex-wrap:nowrap;overflow:auto" });
+      // grid.flex-wrap:nowrap + os 7 dias com flex:1 (sem min-width fixo) — cabem sempre
+      // na largura do cartão, sem scroll, e "hoje" fica sempre o último (mais à direita).
+      const grid = el("div", { class: "row", style: "gap:4px;margin-top:10px;flex-wrap:nowrap" });
       days.forEach((d) => {
         const iso = isoDate(d); const on = !!log[iso]; const isToday = iso === todayISO();
-        grid.appendChild(el("button", { title: iso, style: `flex:1;min-width:20px;aspect-ratio:1;border-radius:6px;border:${isToday ? "2px solid var(--accent)" : "1px solid var(--border)"};background:${on ? "var(--accent)" : "var(--surface-2)"};padding:0`, onclick: () => toggleHabit(h.id, iso) }));
+        grid.appendChild(el("button", { title: iso, style: `flex:1;min-width:0;aspect-ratio:1;border-radius:6px;border:${isToday ? "2px solid var(--accent)" : "1px solid var(--border)"};background:${on ? "var(--accent)" : "var(--surface-2)"};padding:0`, onclick: () => toggleHabit(h.id, iso) }));
       });
       list.appendChild(el("div", { class: "card" }, [
         el("div", { class: "row", style: "justify-content:space-between" }, [
@@ -455,7 +457,13 @@
     const isNew = !h; const f = field("Nome do hábito", { value: h ? h.name : "", placeholder: "ex: Meditar, Dormir 8h…" });
     const sh = sheet(isNew ? "Novo hábito" : "Editar hábito", [f, el("div", { class: "row", style: "gap:10px" }, [
       !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(h)); const logSnap = JSON.parse(JSON.stringify((Store.get(NS).habitLog || {})[h.id] || {})); Store.update(NS, (s) => { s.habits = s.habits.filter((x) => x.id !== h.id); if (s.habitLog) delete s.habitLog[h.id]; }); sh.close(); undo("Hábito apagado", () => Store.update(NS, (s) => { s.habits.push(snap); s.habitLog = s.habitLog || {}; s.habitLog[h.id] = logSnap; })); } }) : null,
-      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { const name = f.input.value.trim(); if (!name) return toast("Escreve o nome."); Store.update(NS, (s) => { if (isNew) s.habits.push({ id: uid(), name }); else { const x = s.habits.find((y) => y.id === h.id); if (x) x.name = name; } }); sh.close(); } }),
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: (e) => {
+        if (e.currentTarget.disabled) return;   // evita criar hábito em duplicado com duplo-toque
+        e.currentTarget.disabled = true;
+        const name = f.input.value.trim(); if (!name) { e.currentTarget.disabled = false; return toast("Escreve o nome."); }
+        Store.update(NS, (s) => { if (isNew) s.habits.push({ id: uid(), name }); else { const x = s.habits.find((y) => y.id === h.id); if (x) x.name = name; } });
+        sh.close();
+      }}),
     ])]);
   }
 
