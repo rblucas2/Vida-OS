@@ -97,7 +97,14 @@
       Sync.reload(); toast("Sincronização ligada ✓");
     }});
 
-    const syncNow = el("button", { class: "btn btn-block", text: "↻ Sincronizar agora", onclick: async () => { if (!Sync.enabled) return toast("Liga a sincronização primeiro."); toast("A sincronizar…"); await Sync.pullAll(); toast("Sincronizado ✓"); } });
+    const syncNow = el("button", { class: "btn btn-block", text: "↻ Sincronizar agora", onclick: async () => {
+      if (!Sync.enabled) return toast("Liga a sincronização primeiro.");
+      toast("A sincronizar…");
+      Sync.flushAllPending();                                  // envia já qualquer alteração ainda pendente
+      await new Promise((res) => setTimeout(res, 400));        // dá tempo ao envio antes de puxar
+      await Sync.pullAll();
+      toast("Sincronizado ✓");
+    }});
 
     const help = el("details", { class: "card", style: "margin-top:4px" }, [
       el("summary", { style: "cursor:pointer;font-weight:600", text: "Como ativar a sincronização grátis (1x, ~3 min)" }),

@@ -1,6 +1,6 @@
 /* =====================================================================
    sync.js — sincronização gratuita e opcional via Supabase (REST)
-   Modelo simples "blob por app" (last-write-wins):
+   Modelo simples "blob por app" (merge sem perdas):
      tabela app_state(app text, sync_code text, data jsonb,
                       updated_at timestamptz, primary key(app, sync_code))
    - Sem cartão de crédito. Free tier do Supabase chega de sobra.
@@ -12,6 +12,7 @@
   let cfg = null;           // { url, key, code }
   let status = "off";       // off | ready | syncing | error
   const pushTimers = {};
+  const pendingData = {};   // ns -> dados por enviar (evita perder alterações se a app fechar antes do debounce)
   const statusCbs = new Set();
 
   function setStatus(s, detail) { status = s; statusCbs.forEach((f) => f(s, detail)); }
@@ -33,34 +34,53 @@
 
   const apps = ["los", "fin", "nut"];
 
-  async function push(ns, data) {
+  function push(ns, data) {
     if (!cfg || !apps.includes(ns)) return;
+    pendingData[ns] = data;
     clearTimeout(pushTimers[ns]);
-    pushTimers[ns] = setTimeout(async () => {
-      try {
-        setStatus("syncing");
-        const body = [{ app: ns, sync_code: cfg.code, data, updated_at: new Date(data._updatedAt || Date.now()).toISOString() }];
-        const r = await fetch(`${cfg.url}/rest/v1/app_state`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
-        if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()));
-        setStatus("ready");
-      } catch (e) { console.warn("sync push", e); setStatus("error", e.message); }
-    }, 1200);
+    pushTimers[ns] = setTimeout(() => flushPush(ns), 1200);
   }
 
-  // Quais os campos que são listas-por-id e objetos-por-chave (para merge sem perdas)
-  const ID_ARRAYS = { fin: ["transactions", "assets", "recurring"], nut: ["foods", "meals"], los: ["habits", "pillars"] };
-  const KEYED_OBJ = { fin: ["budgets", "categoryRules", "nwHistory"], nut: ["diary", "workoutDays", "weightLog"], los: ["days", "habitLog", "reviews"] };
+  /** Envia imediatamente o que estiver pendente (usado pelo debounce e ao sair/minimizar a app). */
+  async function flushPush(ns) {
+    clearTimeout(pushTimers[ns]);
+    const data = pendingData[ns];
+    if (!data || !cfg) return;
+    delete pendingData[ns];
+    try {
+      setStatus("syncing");
+      const body = [{ app: ns, sync_code: cfg.code, data, updated_at: new Date(data._updatedAt || Date.now()).toISOString() }];
+      // on_conflict explícito: garante que o Supabase ATUALIZA a linha existente
+      // (app, sync_code) em vez de poder falhar silenciosamente num "upsert" ambíguo.
+      const r = await fetch(`${cfg.url}/rest/v1/app_state?on_conflict=app,sync_code`, {
+        method: "POST", headers: headers(), body: JSON.stringify(body), keepalive: true,
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()));
+      setStatus("ready");
+    } catch (e) { console.warn("sync push", e); setStatus("error", e.message); }
+  }
+  function flushAllPending() { Object.keys(pendingData).forEach((ns) => flushPush(ns)); }
+
+  // Quais os campos que são listas identificadas por "id", listas identificadas por "name",
+  // e objetos-por-chave (data/dia) — usados para fazer merge sem perdas entre dispositivos.
+  const ID_ARRAYS = { fin: ["transactions", "assets", "recurring", "sources"], nut: ["foods", "meals"], los: ["habits", "pillars"] };
+  const NAME_ARRAYS = { fin: ["categories"] };
+  const KEYED_OBJ = { fin: ["budgets", "categoryRules", "nwHistory"], nut: ["diary", "workoutDays", "weightLog", "mealPlan"], los: ["days", "habitLog", "reviews", "journal"] };
+
+  function mergeArrayBy(out, older, key, keyOf) {
+    const arr = Array.isArray(out[key]) ? out[key] : [];
+    const seen = new Set(arr.map((x) => x && keyOf(x)));
+    (older[key] || []).forEach((x) => { if (x && !seen.has(keyOf(x))) arr.push(x); });
+    out[key] = arr;
+  }
 
   /** Merge sem perdas: base = estado mais recente; acrescenta itens/chaves que só existem no outro. */
   function mergeStates(ns, local, remote) {
     const remoteNewer = (remote._updatedAt || 0) >= (local._updatedAt || 0);
     const newer = remoteNewer ? remote : local, older = remoteNewer ? local : remote;
     const out = JSON.parse(JSON.stringify(newer));
-    (ID_ARRAYS[ns] || []).forEach((key) => {
-      const arr = Array.isArray(out[key]) ? out[key] : []; const ids = new Set(arr.map((x) => x && x.id));
-      (older[key] || []).forEach((x) => { if (x && !ids.has(x.id)) arr.push(x); });
-      out[key] = arr;
-    });
+    (ID_ARRAYS[ns] || []).forEach((key) => mergeArrayBy(out, older, key, (x) => x.id));
+    (NAME_ARRAYS[ns] || []).forEach((key) => mergeArrayBy(out, older, key, (x) => x.name));
     (KEYED_OBJ[ns] || []).forEach((key) => {
       const obj = out[key] && typeof out[key] === "object" ? out[key] : {}; const old = older[key] || {};
       for (const k in old) if (!(k in obj)) obj[k] = old[k];
@@ -108,11 +128,17 @@
     init() {
       loadCfg();
       if (cfg) { pullAll(); setInterval(pullAll, 60000); }
-      // Re-sincroniza ao voltar à app
-      document.addEventListener("visibilitychange", () => { if (!document.hidden && cfg) pullAll(); });
+      // Re-sincroniza ao voltar à app; envia já o que estiver pendente ao sair/minimizar
+      // (evita perder alterações feitas mesmo antes de fechar a app no telemóvel).
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) flushAllPending();
+        else if (cfg) pullAll();
+      });
+      window.addEventListener("pagehide", flushAllPending);
       window.addEventListener("online", () => { if (cfg) pullAll(); });
     },
     push,
+    flushAllPending,
     pullAll,
     test,
     reload() { loadCfg(); if (cfg) pullAll(); },
