@@ -742,13 +742,14 @@
       manual,
     ], { onClose: () => { try { window.__qr && window.__qr.stop(); } catch (e) {} } });
 
+    let lastDetect = 0;
     async function lookup(code) {
       if (!code) return toast("Sem código.");
-      status.textContent = "A procurar " + code + "…";
+      status.textContent = `✓ Código lido: ${code} — a procurar produto…`;
       try {
         const r = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
         const j = await r.json();
-        if (j.status !== 1) { status.textContent = "Produto não encontrado. Insere manualmente."; return manualFood(code); }
+        if (j.status !== 1) { status.textContent = `Código ${code} lido, mas o produto não está na base de dados Open Food Facts. Insere-o manualmente abaixo.`; return; }
         const p = j.product, n = p.nutriments || {};
         const sodio = n["sodium_100g"] != null ? Math.round(n["sodium_100g"] * 1000) : (n["salt_100g"] != null ? Math.round(n["salt_100g"] * 400) : 0);
         const food = { id: "of_" + code, nome: p.product_name || ("Produto " + code), categoria: p.categories_tags ? "Scanner" : "Outros",
@@ -759,47 +760,40 @@
         Store.update(NS, (st) => { if (!st.foods.some((f) => f.id === food.id)) st.foods.unshift(food); });
         try { window.__qr && window.__qr.stop(); } catch (e) {}
         s.close(); toast("✓ " + food.nome); onFood && onFood(food);
-      } catch (e) { status.textContent = "Erro de rede. Tenta o código manual."; }
+      } catch (e) { status.textContent = `Código ${code} lido, mas houve um erro de rede a procurar o produto (${e.message}). Tenta outra vez ou insere manualmente.`; }
     }
-    function manualFood(code) { /* deixa o utilizador criar */ }
 
     // carregar Html5Qrcode dinamicamente
     if (window.Html5Qrcode) startCam();
     else {
+      status.textContent = "A carregar o scanner…";
       const sc = document.createElement("script");
       sc.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
       sc.onload = startCam;
-      sc.onerror = () => { status.textContent = "Sem ligação para o scanner. Usa o código manual."; };
+      sc.onerror = () => { status.textContent = "Sem ligação para descarregar o scanner. Usa o código manual."; };
       document.head.appendChild(sc);
     }
     function startCam() {
       try {
-        // Configuração dedicada a códigos de barras (EAN/UPC dos produtos alimentares),
-        // não só QR codes — e usa o descodificador nativo do telemóvel quando disponível
-        // (muito mais rápido e fiável do que o descodificador em JavaScript).
-        const ctorOpts = { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } };
-        if (window.Html5QrcodeSupportedFormats) {
-          const F = window.Html5QrcodeSupportedFormats;
-          ctorOpts.formatsToSupport = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE];
-        }
-        const q = new Html5Qrcode("qr-reader", ctorOpts); window.__qr = q;
-        // 1º argumento: só a seleção da câmara (tem de ser simples, ex. {facingMode}).
-        // A resolução alta (barras finas de um EAN precisam de detalhe) vai dentro de
-        // "videoConstraints", no 2º argumento — não no 1º, que rejeita chaves extra.
-        const qrboxFn = (vw, vh) => { const w = Math.floor(Math.min(vw, vh) * 0.85); return { width: w, height: Math.floor(w * 0.55) }; };
-        q.start({ facingMode: "environment" }, {
-          fps: 15, qrbox: qrboxFn, aspectRatio: 1.777,
-          videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
-        },
-          (txt) => { q.stop().then(() => lookup(txt)).catch(() => lookup(txt)); },
-          () => {}).then(() => status.textContent = "Aponta ao código de barras — mantém firme, bem iluminado e a uns 10-15cm.")
-          .catch((err) => {
-            const msg = String(err || "");
-            if (/NotAllowedError|Permission/i.test(msg)) status.textContent = "Sem permissão para a câmara. Autoriza o acesso nas definições do browser e tenta outra vez.";
-            else if (/NotFoundError/i.test(msg)) status.textContent = "Não foi encontrada nenhuma câmara. Usa o código manual.";
-            else status.textContent = "Não foi possível abrir a câmara. Usa o código manual.";
-          });
-      } catch (e) { status.textContent = "Scanner indisponível. Usa o código manual."; }
+        // Chamada mais simples e básica possível — a biblioteca já suporta EAN/UPC por
+        // defeito. Ler o frame INTEIRO (sem qrbox) em vez de recortar uma zona, para não
+        // arriscar cortar o código de fora da área de deteção.
+        const q = new Html5Qrcode("qr-reader"); window.__qr = q;
+        q.start(
+          { facingMode: "environment" },
+          { fps: 10 },
+          (txt) => { lastDetect = Date.now(); status.textContent = "✓ Detetado: " + txt; q.stop().then(() => lookup(txt)).catch(() => lookup(txt)); },
+          () => { /* chamado a cada frame sem deteção — normal, não fazer nada */ }
+        ).then(() => {
+          status.textContent = "Câmara aberta — aponta ao código de barras, a uns 10-15cm, bem iluminado.";
+          setTimeout(() => { if (!lastDetect) status.textContent += " Ainda a tentar ler…"; }, 6000);
+        }).catch((err) => {
+          const msg = (err && err.message) || String(err);
+          if (/NotAllowedError|Permission denied/i.test(msg)) status.textContent = "Sem permissão para a câmara. Autoriza o acesso nas definições do browser e tenta outra vez.";
+          else if (/NotFoundError/i.test(msg)) status.textContent = "Não foi encontrada nenhuma câmara. Usa o código manual.";
+          else status.textContent = "Não foi possível abrir a câmara: " + msg;
+        });
+      } catch (e) { status.textContent = "Scanner indisponível: " + (e.message || e); }
     }
   }
 
