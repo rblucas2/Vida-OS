@@ -93,12 +93,9 @@ body {
   text-rendering: optimizeLegibility;
   line-height: 1.45;
   background: var(--bg);
-  /* A PÁGINA (body) é que faz scroll normalmente — mantém o gesto nativo de
-     "puxar para atualizar" no telemóvel. overflow-x:hidden só bloqueia o eixo
-     horizontal, nunca o vertical. */
+  /* Fluxo normal de documento — a PÁGINA faz scroll como qualquer site,
+     mantendo o gesto nativo de "puxar para atualizar" no telemóvel. */
   overflow-x: hidden;
-  min-height: 100vh; min-height: 100dvh;
-  display: flex; flex-direction: column;
 }
 /* halo do acento como camada FIXA por trás do conteúdo */
 body::before {
@@ -109,12 +106,11 @@ body::before {
 /* ---- Layout / app shell ---- */
 .app {
   width: 100%; max-width: 780px; margin: 0 auto;
-  flex: 1 1 auto;
-  padding: 0 var(--pad) 28px;
+  /* espaço para a tabbar fixa não tapar o fim do conteúdo */
+  padding: 0 var(--pad) calc(92px + env(safe-area-inset-bottom));
 }
 
 .topbar {
-  flex: none;
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px;
   padding: calc(14px + env(safe-area-inset-top)) var(--pad) 12px;
@@ -242,11 +238,12 @@ input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--a
 
 /* ---- Bottom navigation ---- */
 .tabbar {
-  flex: none;
-  /* sticky (não fixed): fica presa ao fundo do ecrã ao fazer scroll normal da
-     página, sem o bug do iOS/Chrome mobile em que barras "fixed" desaparecem
-     ou saltam quando a barra de endereço do browser recolhe. */
-  position: sticky; bottom: 0; z-index: 30;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  /* Promove a barra à sua própria camada GPU — é a correção padrão para o bug
+     do iOS/Chrome mobile em que barras "position:fixed" desaparecem ou saltam
+     durante o scroll quando a barra de endereço do browser recolhe. */
+  transform: translateZ(0); -webkit-transform: translateZ(0);
+  will-change: transform;
   display: flex; justify-content: center; gap: 4px;
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
   background: var(--surface);

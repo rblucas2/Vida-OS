@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
   <title>Vida OS</title>
   <meta name="theme-color" content="#0e0f13" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,7 +16,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <style>
     :root{ --accent:#3b6ef5; --accent-2:#6a4bff; --mono:"JetBrains Mono", ui-monospace, monospace; }
-    .wrap{ width:100%; max-width: 1240px; margin:0 auto; flex:1 1 auto; padding: 0 16px 28px; }
+    .wrap{ width:100%; max-width: 1240px; margin:0 auto; padding: 0 16px calc(92px + env(safe-area-inset-bottom)); }
     @media(max-width:759px){ .navpills{ display:none } }
 
     /* Top bar — filho direto do body, tal como .topbar nas outras apps */
