@@ -53,7 +53,6 @@
   }
 
   function workoutDone(nut, los, dateISO = todayISO()) {
-    if (gymWorkoutDone(dateISO)) return true;                 // app de ginásio (gymos)
     if (nut.workoutDays && nut.workoutDays[dateISO]) return true; // toggle manual na Nutrição
     // ou: hábito de ginásio marcado hoje no Life OS
     if (los && los.habits) {
@@ -61,38 +60,6 @@
       if (gym && los.habitLog && los.habitLog[gym.id] && los.habitLog[gym.id][dateISO]) return true;
     }
     return false;
-  }
-
-  /* ---------------- INTEGRAÇÃO COM APP DE GINÁSIO (gymos) ----------------
-     A app de treinos (rblucas2.github.io/gymos) guarda em localStorage a
-     chave 'treino_state' = { log: { "AAAA-MM-DD": [ {name, sets, when} ] } }.
-     Como o GitHub Pages serve as duas apps na MESMA origem, conseguimos lê-la
-     diretamente — sem servidor, sem custos. */
-  function gymState() {
-    try { return JSON.parse(localStorage.getItem("treino_state")) || {}; } catch (e) { return {}; }
-  }
-  function gymLog() { const s = gymState(); return s.log || {}; }
-  function gymConnected() { return Object.keys(gymLog()).length > 0; }
-  function gymWorkoutDone(dateISO = todayISO()) { const l = gymLog(); return !!(l[dateISO] && l[dateISO].length); }
-  function gymStreakReal() {
-    const l = gymLog();
-    const has = (dt) => { const k = UI.isoDate(dt); return l[k] && l[k].length; };
-    let s = 0; const d = new Date();
-    if (!has(d)) d.setDate(d.getDate() - 1);
-    while (has(d)) { s++; d.setDate(d.getDate() - 1); }
-    return s;
-  }
-  function gymWeekCount() {
-    const l = gymLog(); const now = new Date(); const dow = (now.getDay() + 6) % 7;
-    const monday = new Date(now); monday.setDate(now.getDate() - dow); monday.setHours(0, 0, 0, 0);
-    let c = 0; for (const date in l) { if (new Date(date + "T12:00") >= monday) c += l[date].length; }
-    return c;
-  }
-  function gymLastSession() {
-    const l = gymLog(); const dates = Object.keys(l).sort();
-    if (!dates.length) return null;
-    const last = dates[dates.length - 1]; const arr = l[last] || [];
-    return { date: last, name: (arr[arr.length - 1] || {}).name || "Treino" };
   }
 
   /** Soma de macros e micronutrientes consumidos num dia. */
@@ -216,8 +183,7 @@
   }
 
   function gymStreak(los) {
-    if (gymConnected()) return gymStreakReal();           // dados reais da app de ginásio
-    if (!los || !los.habits) return 0;                    // fallback: hábito no Life OS
+    if (!los || !los.habits) return 0;                    // baseado no hábito "Ginásio"/"Treino" do Espiritual
     const gym = los.habits.find((h) => /gin|trein|workout|musc/i.test(h.name));
     return gym ? habitStreak(los, gym.id) : 0;
   }
@@ -227,6 +193,5 @@
     mifflin, nutritionTargets, baseTargets, effectiveTargets, workoutDone, dayIntake, nutritionSummary,
     categorize, financeSummary, netWorth, sourceBalances, isEssential, txInMonth,
     habitStreak, gymStreak,
-    gymState, gymLog, gymConnected, gymWorkoutDone, gymWeekCount, gymLastSession,
   };
 })(window);

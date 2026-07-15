@@ -47,7 +47,6 @@
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     tasks: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
     money: '<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/>',
-    gym: '<path d="M6.5 6.5v11M9.5 9v6M14.5 9v6M17.5 6.5v11M9.5 12h5"/>',
     food: '<path d="M6 2v7a3 3 0 0 0 6 0V2M9 2v20M16 2c-1.5 1-2 3-2 6s.5 4 2 5v9"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   };
@@ -58,7 +57,6 @@
       { id: "lifeos", href: base + "lifeos/", label: "Espiritual", icon: ICON.tasks },
       { id: "finance", href: base + "finance/", label: "Finanças", icon: ICON.money },
       { id: "nutrition", href: base + "nutrition/", label: "Nutrição", icon: ICON.food },
-      { id: "gym", href: base + "gymos/", label: "Ginásio", icon: ICON.gym },
     ];
     const nav = el("nav", { class: "tabbar" });
     items.forEach((it) => {
@@ -117,13 +115,6 @@
       el("pre", { class: "tiny", style: "white-space:pre-wrap;background:var(--surface-2);padding:12px;border-radius:10px;overflow:auto", text: Sync.sqlSchema }),
     ]);
 
-    // Integração com a app de Ginásio
-    const curGym = Store.get("sys").gymUrl || "https://rblucas2.github.io/gymos/";
-    const fGym = el("input", { type: "url", value: curGym, placeholder: "https://.../gymos/" });
-    fGym.addEventListener("change", () => { Store.update("sys", (s) => { s.gymUrl = fGym.value.trim(); }); toast("Guardado ✓"); });
-    const gymField = el("label", { class: "field" }, [el("span", { text: "URL da app de Ginásio (gymos)" }), fGym,
-      el("div", { class: "tiny muted", style: "margin-top:6px", html: Domain.gymConnected() ? "✓ Ligada — treinos detetados neste dispositivo." : "Para ler os treinos, publica esta suite na mesma conta GitHub (mesma origem que o gymos)." })]);
-
     // Google Calendar
     const gc = Store.get("sys").gcal || {};
     const fCid = el("input", { type: "text", value: gc.clientId || "", placeholder: "…apps.googleusercontent.com" });
@@ -172,7 +163,6 @@
     UI.sheet("Definições", [
       el("div", { class: "section-title", style: "margin-top:4px", text: "Aparência" }), themeSel,
       el("button", { class: "btn btn-soft btn-block", text: "Instalar app no dispositivo", onclick: promptInstall }),
-      el("div", { class: "section-title", text: "Integração · Ginásio" }), gymField,
       el("div", { class: "section-title", text: "Integração · Google Calendar" }), gcalField,
       el("div", { class: "section-title", text: "Sincronização telemóvel ↔ PC" }),
       el("div", { class: "row" }, [el("span", { class: "muted tiny", text: "Estado:" }), syncState]),

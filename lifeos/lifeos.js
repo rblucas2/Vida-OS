@@ -250,41 +250,6 @@
     ])]);
   }
 
-  /* --------------------- Widgets de integração --------------------- */
-  function integrationWidgets() {
-    const los = Store.get(NS), nut = Store.get("nut"), fin = Store.get("fin");
-    const wrap = el("div", { class: "grid-2", style: "grid-template-columns:1fr 1fr 1fr;gap:10px" });
-
-    // Treino / saúde — lê a app de ginásio (gymos) se estiver na mesma origem
-    const gymUrl = Store.get("sys").gymUrl || "https://rblucas2.github.io/gymos/";
-    const gymOn = D.gymConnected();
-    const streak = D.gymStreak(los);
-    const trained = D.workoutDone(nut, los);
-    const last = D.gymLastSession();
-    const gymBig = trained ? "✓ Hoje" : (streak > 0 ? streak + (streak === 1 ? " dia" : " dias") : "—");
-    const gymLabel = trained ? (last ? last.name : "treino feito") : (gymOn ? "🔥 streak ginásio" : "abrir ginásio");
-    wrap.appendChild(widget(gymUrl, "💪", gymBig, gymLabel, "var(--accent)", () => { location.href = gymUrl; }));
-
-    // Nutrição
-    const ns = D.nutritionSummary(nut, los);
-    if (ns.configured) wrap.appendChild(widget("../nutrition/", "🍎", num(ns.kcalLeft) , ns.kcalLeft >= 0 ? "kcal livres" : "kcal a mais", "var(--good)", () => go("../nutrition/")));
-    else wrap.appendChild(widget("../nutrition/", "🍎", "—", "Configurar", "var(--text-mute)", () => go("../nutrition/")));
-
-    // Finanças
-    const fs = D.financeSummary(fin);
-    wrap.appendChild(widget("../finance/", "💶", eur0(fs.free), "livre p/ gastar", fs.free < 0 ? "var(--bad)" : "var(--good)", () => go("../finance/")));
-
-    return wrap;
-  }
-  function widget(href, icon, big, label, color, onclick) {
-    return el("div", { class: "card", style: "padding:13px 10px;text-align:center;cursor:pointer", onclick }, [
-      el("div", { style: "font-size:1.3rem", text: icon }),
-      el("div", { class: "num", style: "font-size:1.15rem;font-weight:700;color:" + color + ";margin-top:2px;line-height:1.1", text: big }),
-      el("div", { class: "tiny muted", style: "font-size:.66rem", text: label }),
-    ]);
-  }
-  function go(href) { location.href = href; }
-
   /* ----------------------------- AGENDA (Google Calendar) ----------------------------- */
   function renderAgenda(view) {
     $("#subtitle").textContent = "Agenda · Google Calendar";

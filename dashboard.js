@@ -47,8 +47,8 @@
 
   /* 01 — Operador */
   function pOperator(los) {
-    const streak = D.gymStreak(los);
-    let best = 0; (los.habits || []).forEach((h) => { best = Math.max(best, D.habitStreak(los, h.id)); });
+    let best = 0, count = 0;
+    (los.habits || []).forEach((h) => { best = Math.max(best, D.habitStreak(los, h.id)); if (los.habitLog && los.habitLog[h.id] && los.habitLog[h.id][todayISO()]) count++; });
     return panel("c3", "01", "Operador", "● online", [
       el("div", { class: "row", style: "gap:14px" }, [
         el("div", { class: "avatar", text: NAME[0] }),
@@ -56,7 +56,7 @@
       ]),
       el("div", { class: "statline", style: "margin-top:14px" }, [
         el("div", { class: "stat" }, [el("div", { class: "n", text: best }), el("div", { class: "l", text: "Melhor streak" })]),
-        el("div", { class: "stat" }, [el("div", { class: "n", style: "color:var(--accent)", text: streak }), el("div", { class: "l", text: "Ginásio (dias)" })]),
+        el("div", { class: "stat" }, [el("div", { class: "n", style: "color:var(--accent)", text: count }), el("div", { class: "l", text: "Feitos hoje" })]),
       ]),
     ]);
   }

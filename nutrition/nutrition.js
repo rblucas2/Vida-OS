@@ -182,8 +182,7 @@
     if (targets) {
       // Ações
       const trained = D.workoutDone(nut, los, viewDate);
-      const fromGym = D.gymWorkoutDone(viewDate);
-      const trainBtn = el("button", { class: "btn btn-block " + (trained ? "btn-soft" : ""), disabled: fromGym, title: fromGym ? "Treino registado na app de Ginásio" : "", html: (trained ? "✓ " : "") + (fromGym ? "Treino (Ginásio) 💪" : "Treino concluído"), onclick: () => {
+      const trainBtn = el("button", { class: "btn btn-block " + (trained ? "btn-soft" : ""), html: (trained ? "✓ " : "") + "Treino concluído", onclick: () => {
         Store.update(NS, (s) => { s.workoutDays = s.workoutDays || {}; if (s.workoutDays[viewDate]) delete s.workoutDays[viewDate]; else s.workoutDays[viewDate] = true; });
       }});
       cards.push(el("div", { class: "grid-2" }, [el("button", { class: "btn btn-soft btn-block", html: "⚡ Fechar macros", onclick: macroSolver }), trainBtn]));
