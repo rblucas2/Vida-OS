@@ -783,9 +783,14 @@
           ctorOpts.formatsToSupport = [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE];
         }
         const q = new Html5Qrcode("qr-reader", ctorOpts); window.__qr = q;
-        q.start({ facingMode: "environment" }, { fps: 12, qrbox: { width: 280, height: 130 }, aspectRatio: 1.6 },
+        // Pede vídeo em alta resolução (barras finas de um EAN precisam de detalhe) e uma
+        // caixa de deteção PROPORCIONAL ao vídeo real (uma caixa fixa em px podia ficar
+        // maior do que o vídeo em ecrãs pequenos, impedindo a deteção por completo).
+        const videoConstraints = { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } };
+        const qrboxFn = (vw, vh) => { const w = Math.floor(Math.min(vw, vh) * 0.85); return { width: w, height: Math.floor(w * 0.55) }; };
+        q.start(videoConstraints, { fps: 15, qrbox: qrboxFn, aspectRatio: 1.777 },
           (txt) => { q.stop().then(() => lookup(txt)).catch(() => lookup(txt)); },
-          () => {}).then(() => status.textContent = "Aponta ao código de barras — mantém firme e bem iluminado.")
+          () => {}).then(() => status.textContent = "Aponta ao código de barras — mantém firme, bem iluminado e a uns 10-15cm.")
           .catch((err) => {
             const msg = String(err || "");
             if (/NotAllowedError|Permission/i.test(msg)) status.textContent = "Sem permissão para a câmara. Autoriza o acesso nas definições do browser e tenta outra vez.";
