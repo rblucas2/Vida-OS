@@ -734,11 +734,18 @@
   /* ----------------------------- SCANNER ----------------------------- */
   function openScanner(onFood) {
     const status = el("div", { class: "tiny muted center", text: "A iniciar câmara…" });
-    const reader = el("div", { id: "qr-reader", style: "width:100%;border-radius:12px;overflow:hidden" });
+    // altura mínima garantida (aspect-ratio como reforço) — sem isto, o vídeo interno
+    // da biblioteca podia ficar sem espaço visível e parecer que "não há câmara".
+    const reader = el("div", { id: "qr-reader", style: "width:100%;min-height:260px;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:#000" });
+    const captureBtn = el("button", { class: "btn btn-primary btn-block", html: "📸 Tirar foto e tentar ler", style: "margin-top:8px" });
     const manual = field("Ou insere o código manualmente", { placeholder: "ex: 5601234567890", inputmode: "numeric" });
     const s = sheet("Scanner de código de barras", [
-      reader, status,
-      el("button", { class: "btn btn-block", text: "Procurar código manual", onclick: () => lookup(manual.input.value.trim()) }),
+      reader, status, captureBtn,
+      el("button", { class: "btn btn-block", text: "Procurar código manual", onclick: () => {
+        const code = manual.input.value.trim().replace(/[^0-9]/g, "");
+        if (!code) { toast("Escreve o código de barras (só números) antes de procurar."); return; }
+        lookup(code);
+      }}),
       manual,
     ], { onClose: () => { try { window.__qr && window.__qr.stop(); } catch (e) {} } });
 
@@ -773,6 +780,25 @@
       sc.onerror = () => { status.textContent = "Sem ligação para descarregar o scanner. Usa o código manual."; };
       document.head.appendChild(sc);
     }
+    async function captureAndRead() {
+      const video = reader.querySelector("video");
+      if (!video || !video.videoWidth) return toast("A câmara ainda não está pronta.");
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (window.BarcodeDetector) {
+        try {
+          const det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"] });
+          const found = await det.detect(canvas);
+          if (found.length) { const txt = found[0].rawValue; status.textContent = "✓ Detetado (foto): " + txt; lastDetect = Date.now(); return lookup(txt); }
+          status.textContent = "Não foi possível ler nenhum código nesta foto. Aproxima-te mais e tenta outra vez.";
+          return;
+        } catch (e) { /* segue para a alternativa abaixo */ }
+      }
+      status.textContent = "O teu browser não suporta captura manual — usa o código de barras escrito, abaixo.";
+    }
+    captureBtn.addEventListener("click", captureAndRead);
+
     function startCam() {
       try {
         // Chamada mais simples e básica possível — a biblioteca já suporta EAN/UPC por
@@ -785,7 +811,7 @@
           (txt) => { lastDetect = Date.now(); status.textContent = "✓ Detetado: " + txt; q.stop().then(() => lookup(txt)).catch(() => lookup(txt)); },
           () => { /* chamado a cada frame sem deteção — normal, não fazer nada */ }
         ).then(() => {
-          status.textContent = "Câmara aberta — aponta ao código de barras, a uns 10-15cm, bem iluminado.";
+          status.textContent = "Câmara aberta — aponta ao código de barras, a uns 10-15cm, bem iluminado. Se não ler sozinho, usa 'Tirar foto e tentar ler'.";
           setTimeout(() => { if (!lastDetect) status.textContent += " Ainda a tentar ler…"; }, 6000);
         }).catch((err) => {
           const msg = (err && err.message) || String(err);
