@@ -20,6 +20,23 @@
     { id: "f_azeite", nome: "Azeite", categoria: "Gordura", calorias: 884, proteina: 0, hidratos: 0, gordura: 100, fibra: 0, acucar: 0, saturadas: 14, sodio: 2 },
     { id: "f_brocolos", nome: "Brócolos", categoria: "Legumes", calorias: 34, proteina: 2.8, hidratos: 7, gordura: 0.4, fibra: 2.6, acucar: 1.7, saturadas: 0.1, sodio: 33 },
     { id: "f_amendoa", nome: "Amêndoas", categoria: "Gordura", calorias: 579, proteina: 21, hidratos: 22, gordura: 50, fibra: 12.5, acucar: 4.4, saturadas: 3.7, sodio: 1 },
+    // Adicionados a pedido — valores por 100g (referências USDA/tabelas nutricionais; pratos
+    // preparados como panado, calamares ou tosta mista são estimativas típicas e podem ser
+    // ajustados em "Editar alimento" consoante a receita exata).
+    { id: "f_croissant", nome: "Croissant", categoria: "Padaria", calorias: 406, proteina: 8.2, hidratos: 45.8, gordura: 21, fibra: 2.6, acucar: 8.2, saturadas: 11.7, sodio: 490 },
+    { id: "f_bolo_arroz", nome: "Bolo de arroz", categoria: "Padaria", calorias: 350, proteina: 5, hidratos: 50, gordura: 14, fibra: 0.8, acucar: 20, saturadas: 4, sodio: 150 },
+    { id: "f_donut", nome: "Donut", categoria: "Padaria", calorias: 452, proteina: 4.9, hidratos: 51, gordura: 25, fibra: 1.4, acucar: 23, saturadas: 9.9, sodio: 373 },
+    { id: "f_arroz_branco", nome: "Arroz branco cozido", categoria: "Hidratos", calorias: 130, proteina: 2.7, hidratos: 28, gordura: 0.3, fibra: 0.4, acucar: 0.1, saturadas: 0.1, sodio: 1 },
+    { id: "f_batata_cozida", nome: "Batata cozida", categoria: "Hidratos", calorias: 87, proteina: 1.9, hidratos: 20, gordura: 0.1, fibra: 1.8, acucar: 0.8, saturadas: 0, sodio: 6 },
+    { id: "f_batata_salteada", nome: "Batata salteada", categoria: "Hidratos", calorias: 150, proteina: 2.3, hidratos: 24, gordura: 5, fibra: 2, acucar: 1, saturadas: 0.7, sodio: 250 },
+    { id: "f_massa", nome: "Massa cozida", categoria: "Hidratos", calorias: 131, proteina: 5, hidratos: 25, gordura: 1.1, fibra: 1.8, acucar: 0.6, saturadas: 0.2, sodio: 1 },
+    { id: "f_maca", nome: "Maçã", categoria: "Fruta", calorias: 52, proteina: 0.3, hidratos: 13.8, gordura: 0.2, fibra: 2.4, acucar: 10.4, saturadas: 0, sodio: 1 },
+    { id: "f_uvas", nome: "Uvas", categoria: "Fruta", calorias: 69, proteina: 0.7, hidratos: 18.1, gordura: 0.2, fibra: 0.9, acucar: 15.5, saturadas: 0, sodio: 2 },
+    { id: "f_mirtilos", nome: "Mirtilos", categoria: "Fruta", calorias: 57, proteina: 0.7, hidratos: 14.5, gordura: 0.3, fibra: 2.4, acucar: 10, saturadas: 0, sodio: 1 },
+    { id: "f_panado_frango", nome: "Panado de frango", categoria: "Proteína", calorias: 250, proteina: 15, hidratos: 15, gordura: 15, fibra: 0.8, acucar: 1, saturadas: 3, sodio: 450 },
+    { id: "f_calamares", nome: "Calamares fritos", categoria: "Proteína", calorias: 230, proteina: 12, hidratos: 13, gordura: 15, fibra: 0.5, acucar: 0.3, saturadas: 3, sodio: 400 },
+    { id: "f_torradas", nome: "Torradas", categoria: "Padaria", calorias: 266, proteina: 7.6, hidratos: 50.6, gordura: 3.3, fibra: 2.4, acucar: 5, saturadas: 0.7, sodio: 490 },
+    { id: "f_tosta_mista", nome: "Tosta mista", categoria: "Refeição", calorias: 280, proteina: 13, hidratos: 28, gordura: 13, fibra: 1.5, acucar: 3, saturadas: 6, sodio: 750 },
   ];
 
   // Constrói uma entrada de diário (macros + micros) a partir de um alimento e gramas
@@ -38,15 +55,32 @@
     { id: "pa", label: "Pequeno-almoço", icon: "🌅" }, { id: "al", label: "Almoço", icon: "🍽️" },
     { id: "la", label: "Lanche", icon: "🍎" }, { id: "ja", label: "Jantar", icon: "🌙" },
   ];
+  // Sugere a refeição mais provável consoante a hora do dia (usado como valor por defeito)
+  function guessSlot() {
+    const h = new Date().getHours();
+    if (h < 11) return "pa"; if (h < 15) return "al"; if (h < 19) return "la"; return "ja";
+  }
+
+  // Acrescenta à base do utilizador os alimentos "seed" que ainda não tenha (por id),
+  // sem duplicar nem tocar em nada que já exista — necessário porque Store.ensure só
+  // preenche "foods" na primeira utilização, não em utilizadores que já têm dados.
+  function seedNewFoods() {
+    Store.update(NS, (s) => {
+      s.foods = s.foods || [];
+      const ids = new Set(s.foods.map((f) => f.id));
+      SEED_FOODS.forEach((f) => { if (!ids.has(f.id)) s.foods.push(f); });
+    }, { silent: true });
+  }
 
   function init() {
     App.boot({ active: "nutrition" });
     Store.ensure(NS, { profile: null, customTargets: null, foods: SEED_FOODS, diary: {}, meals: [], workoutDays: {}, weightLog: {}, mealPlan: {} });
+    seedNewFoods();
     App.onboard("nutrition", "Nutrição", [
       "🧮 Define o teu perfil na <b>Calculadora</b> (Mifflin-St Jeor).",
       "📷 Regista comida com o <b>scanner de código de barras</b> (Open Food Facts).",
       "⚡ O <b>Fecho de macros</b> sugere o que comer para fechares o dia.",
-      "💪 Em dias de treino (lidos da app de Ginásio), os alvos sobem automaticamente.",
+      "🍽️ Associa cada refeição a Pequeno-almoço, Almoço, Lanche ou Jantar ao adicionar.",
     ]);
     $("#settingsBtn").addEventListener("click", App.openSettings);
     const tabs = $("#tabs");
@@ -206,7 +240,7 @@
       ]));
     }
 
-    // Diário — SEMPRE
+    // Diário — SEMPRE, agrupado por refeição (Pequeno-almoço/Almoço/Lanche/Jantar)
     const items = (nut.diary[viewDate] || []);
     const diaryCard = el("div", { class: "card" }, [
       el("div", { class: "row", style: "justify-content:space-between;margin-bottom:6px" }, [
@@ -215,13 +249,24 @@
     ]);
     if (!items.length) diaryCard.appendChild(el("div", { class: "empty", text: "Ainda não registaste nada. Toca em + para adicionar." }));
     else {
-      const list = el("div", { class: "list" });
-      items.forEach((it) => list.appendChild(el("div", { class: "item" }, [
-        el("div", { class: "grow" }, [el("div", { class: "t", text: it.nome }), el("div", { class: "s", text: `${num(it.grams)} g · ${num(it.p)}P ${num(it.c)}C ${num(it.f)}G` })]),
-        el("div", { class: "amt", text: num(it.kcal) + " kcal" }),
-        el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => removeDiary(it.id) }),
-      ])));
-      diaryCard.appendChild(list);
+      const groups = PLAN_SLOTS.map((sl) => ({ ...sl, entries: items.filter((it) => it.slot === sl.id) }));
+      const semRefeicao = items.filter((it) => !it.slot);
+      if (semRefeicao.length) groups.push({ id: "outros", label: "Outros", icon: "•", entries: semRefeicao });
+      groups.forEach((g) => {
+        if (!g.entries.length) return;
+        const gTot = g.entries.reduce((a, it) => a + (it.kcal || 0), 0);
+        diaryCard.appendChild(el("div", { class: "row", style: "justify-content:space-between;margin-top:14px" }, [
+          el("strong", { style: "font-size:.9rem", html: g.icon + " " + g.label }),
+          el("span", { class: "tiny muted num", text: num(gTot) + " kcal" }),
+        ]));
+        const list = el("div", { class: "list" });
+        g.entries.forEach((it) => list.appendChild(el("div", { class: "item" }, [
+          el("div", { class: "grow" }, [el("div", { class: "t", text: it.nome }), el("div", { class: "s", text: `${num(it.grams)} g · ${num(it.p)}P ${num(it.c)}C ${num(it.f)}G` })]),
+          el("div", { class: "amt", text: num(it.kcal) + " kcal" }),
+          el("button", { class: "btn btn-ghost btn-sm", text: "✕", onclick: () => removeDiary(it.id) }),
+        ])));
+        diaryCard.appendChild(list);
+      });
     }
     cards.push(diaryCard);
 
@@ -254,9 +299,10 @@
   }
 
   function logMeal(m) {
+    const slot = guessSlot();
     Store.update(NS, (s) => {
       s.diary[viewDate] = s.diary[viewDate] || [];
-      m.items.forEach((it) => s.diary[viewDate].push({ ...it, id: uid() }));
+      m.items.forEach((it) => s.diary[viewDate].push({ ...it, id: uid(), slot }));
     });
     toast("Refeição adicionada ✓");
   }
@@ -265,6 +311,11 @@
   function addFoodSheet(preset) {
     const nut = Store.get(NS);
     let selected = preset || null;
+    let slot = guessSlot();
+    const slotSeg = el("div", { class: "seg" }, PLAN_SLOTS.map((sl) => el("button", {
+      class: sl.id === slot ? "active" : "", html: sl.icon + " " + sl.label,
+      onclick: (e) => { slot = sl.id; [...slotSeg.children].forEach((c) => c.classList.toggle("active", c === e.currentTarget)); },
+    })));
     const search = field("Procurar alimento", { placeholder: "ex: frango, aveia…" });
     const results = el("div", { class: "list", style: "max-height:240px;overflow:auto" });
     const gramsF = field("Quantidade (g)", { type: "number", value: 100, inputmode: "decimal" });
@@ -296,14 +347,14 @@
     if (preset) pick(preset);
 
     const s = sheet("Adicionar ao diário", [
+      el("label", { class: "field" }, [el("span", { text: "Refeição" }), slotSeg]),
       scanBtn, search, results, gramsF, preview,
       el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
         if (!selected) return toast("Escolhe um alimento.");
         const g = parseFloat(gramsF.input.value) || 0; if (g <= 0) return toast("Quantidade inválida.");
-        const k = g / 100;
         Store.update(NS, (st) => {
           st.diary[viewDate] = st.diary[viewDate] || [];
-          st.diary[viewDate].push({ id: uid(), ...entryFromFood(selected, g) });
+          st.diary[viewDate].push({ id: uid(), slot, ...entryFromFood(selected, g) });
         });
         s.close(); toast("Adicionado ✓");
       }}),
@@ -359,7 +410,7 @@
   function addFromSolver(c) {
     Store.update(NS, (st) => {
       st.diary[viewDate] = st.diary[viewDate] || [];
-      st.diary[viewDate].push({ id: uid(), ...entryFromFood(c.food, c.grams) });
+      st.diary[viewDate].push({ id: uid(), slot: guessSlot(), ...entryFromFood(c.food, c.grams) });
     });
     toast("Adicionado ✓");
   }
@@ -672,9 +723,9 @@
       ? el("p", { class: "tiny", style: "color:var(--good);text-align:center;font-weight:600", text: "🔄 Este dia sincroniza automaticamente com o Diário de hoje." })
       : el("button", { class: "btn btn-primary btn-block", text: "↳ Copiar este dia para o diário de hoje", onclick: () => {
           const entries = [];
-          PLAN_SLOTS.forEach((sl) => (dayPlan[sl.id] || []).forEach((e) => { if (e.kcal) entries.push(e); }));
+          PLAN_SLOTS.forEach((sl) => (dayPlan[sl.id] || []).forEach((e) => { if (e.kcal) entries.push({ ...e, slot: sl.id }); }));
           if (!entries.length) return toast("Nada com macros para copiar.");
-          Store.update(NS, (s) => { s.diary[todayISO()] = s.diary[todayISO()] || []; entries.forEach((e) => s.diary[todayISO()].push({ id: uid(), foodId: e.foodId, nome: e.nome, grams: e.grams || 0, kcal: e.kcal, p: e.p, c: e.c, f: e.f })); });
+          Store.update(NS, (s) => { s.diary[todayISO()] = s.diary[todayISO()] || []; entries.forEach((e) => s.diary[todayISO()].push({ id: uid(), slot: e.slot, foodId: e.foodId, nome: e.nome, grams: e.grams || 0, kcal: e.kcal, p: e.p, c: e.c, f: e.f, fib: e.fib || 0, sug: e.sug || 0, sat: e.sat || 0, sod: e.sod || 0 })); });
           toast(entries.length + " itens no diário de hoje ✓");
         }});
 
@@ -700,7 +751,7 @@
         // este dia é hoje → sincroniza logo com o diário de hoje, sem precisar de "Copiar"
         if (dayId === todayPlanDay() && entry.kcal) {
           s.diary[todayISO()] = s.diary[todayISO()] || [];
-          s.diary[todayISO()].push({ id: uid(), planRef: entry.id, foodId: entry.foodId, nome: entry.nome, grams: entry.grams || 0, kcal: entry.kcal, p: entry.p || 0, c: entry.c || 0, f: entry.f || 0 });
+          s.diary[todayISO()].push({ id: uid(), slot: slotId, planRef: entry.id, foodId: entry.foodId, nome: entry.nome, grams: entry.grams || 0, kcal: entry.kcal, p: entry.p || 0, c: entry.c || 0, f: entry.f || 0, fib: entry.fib || 0, sug: entry.sug || 0, sat: entry.sat || 0, sod: entry.sod || 0 });
         }
       });
       sh.close(); toast("Adicionado ✓");
