@@ -37,6 +37,8 @@
     { id: "f_calamares", nome: "Calamares fritos", categoria: "Proteína", calorias: 230, proteina: 12, hidratos: 13, gordura: 15, fibra: 0.5, acucar: 0.3, saturadas: 3, sodio: 400 },
     { id: "f_torradas", nome: "Torradas", categoria: "Padaria", calorias: 266, proteina: 7.6, hidratos: 50.6, gordura: 3.3, fibra: 2.4, acucar: 5, saturadas: 0.7, sodio: 490 },
     { id: "f_tosta_mista", nome: "Tosta mista", categoria: "Refeição", calorias: 280, proteina: 13, hidratos: 28, gordura: 13, fibra: 1.5, acucar: 3, saturadas: 6, sodio: 750 },
+    { id: "f_febras", nome: "Febras de porco grelhadas", categoria: "Proteína", calorias: 210, proteina: 27, hidratos: 0, gordura: 11, fibra: 0, acucar: 0, saturadas: 3.8, sodio: 420 },
+    { id: "f_cachorro_quente", nome: "Cachorro quente", categoria: "Refeição", calorias: 300, proteina: 9.5, hidratos: 25, gordura: 18, fibra: 1.2, acucar: 6.5, saturadas: 5.5, sodio: 800 },
   ];
 
   // Constrói uma entrada de diário (macros + micros) a partir de um alimento e gramas

@@ -11,6 +11,7 @@
     App.boot({ active: "lifeos" });
     Store.ensure(NS, { days: {}, brainDump: "", pillars: [], habits: [], habitLog: {}, reviews: {}, journal: {} });
     seedIfEmpty();
+    dedupeSeeded();
     App.onboard("lifeos", "Espiritual", [
       "🎯 <b>Top 3</b>: define até 3 prioridades absolutas por dia.",
       "📓 <b>Diário</b>: escreve como foi o teu dia e regista o teu humor.",
@@ -34,14 +35,65 @@
     const s = Store.get(NS);
     if (!s.habits.length && !s._seeded) {
       Store.update(NS, (st) => {
-        st.habits = [{ id: uid(), name: "Beber água" }, { id: uid(), name: "Ler" }, { id: uid(), name: "Ginásio" }];
+        // IDs fixos (não uid() aleatório): se este dispositivo e outro fizerem seed
+        // ANTES de sincronizarem entre si, ficam com os MESMOS ids e a sincronização
+        // reconhece-os como o mesmo hábito em vez de os duplicar.
+        st.habits = [{ id: "seed_h_agua", name: "Beber água" }, { id: "seed_h_ler", name: "Ler" }, { id: "seed_h_ginasio", name: "Ginásio" }];
         st.pillars = [
-          { id: uid(), name: "Saúde", goals: [] }, { id: uid(), name: "Finanças", goals: [] },
-          { id: uid(), name: "Conhecimento", goals: [] }, { id: uid(), name: "Trabalho", goals: [] },
+          { id: "seed_p_saude", name: "Saúde", goals: [] }, { id: "seed_p_financas", name: "Finanças", goals: [] },
+          { id: "seed_p_conhecimento", name: "Conhecimento", goals: [] }, { id: "seed_p_trabalho", name: "Trabalho", goals: [] },
         ];
         st._seeded = true;
       }, { silent: true });
     }
+  }
+
+  // Nomes dos hábitos/pilares "seed" por defeito — os que arriscam duplicar-se se a app
+  // foi usada em dois dispositivos antes de ligares a sincronização entre eles.
+  const SEED_HABIT_NAMES = ["beber água", "ler", "ginásio"];
+  const SEED_PILLAR_NAMES = ["saúde", "finanças", "conhecimento", "trabalho"];
+
+  // Junta duplicados já existentes desses hábitos/pilares "seed" (mesmo nome), fundindo
+  // o histórico (streaks/objetivos) em vez de simplesmente apagar. Corre uma única vez.
+  function dedupeSeeded() {
+    const s = Store.get(NS);
+    if (s._dedupedV1) return;
+    Store.update(NS, (st) => {
+      const keptHabitByName = new Map();
+      const habitsOut = [];
+      (st.habits || []).forEach((h) => {
+        const key = (h.name || "").trim().toLowerCase();
+        if (SEED_HABIT_NAMES.includes(key) && keptHabitByName.has(key)) {
+          const kept = keptHabitByName.get(key);
+          const dupLog = (st.habitLog && st.habitLog[h.id]) || {};
+          st.habitLog = st.habitLog || {}; st.habitLog[kept.id] = st.habitLog[kept.id] || {};
+          Object.assign(st.habitLog[kept.id], dupLog);   // funde os dias marcados do duplicado
+          delete st.habitLog[h.id];
+        } else {
+          if (SEED_HABIT_NAMES.includes(key)) keptHabitByName.set(key, h);
+          habitsOut.push(h);
+        }
+      });
+      st.habits = habitsOut;
+
+      const keptPillarByName = new Map();
+      const pillarsOut = [];
+      (st.pillars || []).forEach((p) => {
+        const key = (p.name || "").trim().toLowerCase();
+        if (SEED_PILLAR_NAMES.includes(key) && keptPillarByName.has(key)) {
+          const kept = keptPillarByName.get(key);
+          kept.goals = kept.goals || [];
+          const existingIds = new Set(kept.goals.map((g) => g.id));
+          (p.goals || []).forEach((g) => { if (!existingIds.has(g.id)) kept.goals.push(g); });
+        } else {
+          if (SEED_PILLAR_NAMES.includes(key)) keptPillarByName.set(key, p);
+          pillarsOut.push(p);
+        }
+      });
+      st.pillars = pillarsOut;
+
+      st._dedupedV1 = true;
+    }, { silent: true });
   }
 
   let current = "hoje";
