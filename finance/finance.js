@@ -2,7 +2,7 @@
    Finanças Pessoais
    ===================================================================== */
 (function () {
-  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, colorFor, uid, todayISO, monthKey, prettyMonth } = UI;
+  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, colorFor, uid, todayISO, monthKey, prettyMonth, guardClick } = UI;
   const D = Domain;
   const NS = "fin";
 
@@ -307,12 +307,12 @@
     let saved = false;
     const fn = field("Nome da nova fonte", { placeholder: "ex: Cartão Revolut" });
     const fb = field("Saldo inicial (€, opcional)", { type: "number", inputmode: "decimal", step: "0.01" });
-    const sh2 = sheet("Nova fonte de pagamento", [fn, fb, el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+    const sh2 = sheet("Nova fonte de pagamento", [fn, fb, el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
       const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
       Store.update(NS, (s) => { s.sources = s.sources || []; if (!s.sources.some((x) => x.name === name)) s.sources.push({ id: uid(), name, opening: parseFloat(fb.input.value) || 0 }); });
       saved = true;
       sh2.close(); toast("Fonte criada ✓"); onDone(name);
-    }})], { onClose: () => { if (!saved && onCancel) onCancel(); } });
+    })})], { onClose: () => { if (!saved && onCancel) onCancel(); } });
   }
   function essentialSet() { const c = Store.get(NS).categories || []; const s = c.filter((x) => x.group === "essential").map((x) => x.name); return s.length ? s : Domain.ESSENTIAL_CATS; }
   function catGroup(name) { const c = (Store.get(NS).categories || []).find((x) => x.name === name); return c ? c.group : (Domain.ESSENTIAL_CATS.includes(name) ? "essential" : "lifestyle"); }
@@ -342,15 +342,15 @@
     const back = () => { sh.close(); if (parentSheet) { parentSheet.close(); manageCategories(); } };
     const sh = sheet(isNew ? "Nova categoria" : "Editar categoria", [fn, fg, el("div", { class: "row", style: "gap:10px" }, [
       !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.categories = s.categories.filter((x) => x.name !== old); }); back(); } }) : null,
-      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
         const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
         Store.update(NS, (s) => {
           const i = s.categories.findIndex((x) => x.name === old);
           if (i >= 0) { s.categories[i] = { name, group: fg.input.value }; if (old !== name) s.transactions.forEach((t) => { if (t.category === old) t.category = name; }); }
-          else s.categories.push({ name, group: fg.input.value });
+          else if (!s.categories.some((x) => x.name === name)) s.categories.push({ name, group: fg.input.value });
         });
         back();
-      }}),
+      })}),
     ])]);
   }
   function manageSources() {

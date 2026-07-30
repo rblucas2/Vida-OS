@@ -2,7 +2,7 @@
    Life OS — Dashboard pessoal diário
    ===================================================================== */
 (function () {
-  const { el, $, clear, num, eur0, toast, undo, sheet, field, bar, uid, todayISO, isoDate } = UI;
+  const { el, $, clear, num, eur0, toast, undo, sheet, field, bar, uid, todayISO, isoDate, guardClick } = UI;
   const D = Domain;
   const NS = "los";
   const BLOCKS = [{ id: "manha", label: "Manhã", icon: "🌅" }, { id: "tarde", label: "Tarde", icon: "☀️" }, { id: "noite", label: "Noite", icon: "🌙" }];
@@ -285,12 +285,12 @@
     const fText = field("Tarefa", { placeholder: "O que precisas de fazer?" });
     const fBlock = field("Bloco", { type: "select", value: block || "", options: [{ value: "", label: "Sem horário" }, ...BLOCKS.map((b) => ({ value: b.id, label: b.label }))] });
     const sh = sheet("Nova tarefa", [fText, fBlock, el("label", { class: "row", style: "gap:8px" }, [el("input", { type: "checkbox", checked: !!top, id: "istop" }), el("span", { text: "Marcar como prioridade (Top 3)" })]),
-      el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
+      el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: guardClick(() => {
         const text = fText.input.value.trim(); if (!text) return toast("Escreve a tarefa.");
         const isTop = $("#istop").checked && curDay().tasks.filter((t) => t.top).length < 3;
         Store.update(NS, (s) => { s.days[viewDate].tasks.push({ id: uid(), text, done: false, block: fBlock.input.value || null, top: isTop }); });
         sh.close();
-      }})]);
+      })})]);
     setTimeout(() => fText.input.focus(), 50);
   }
   function editTask(t) {
@@ -518,14 +518,14 @@
   function toggleGoal(pid, gid) { Store.update(NS, (s) => { const p = s.pillars.find((x) => x.id === pid); const g = p.goals.find((x) => x.id === gid); if (g) g.done = !g.done; }); }
   function addGoal(pid) {
     const f = field("Objetivo", { placeholder: "ex: Poupar 2000€, Ler 12 livros…" });
-    const sh = sheet("Novo objetivo", [f, el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => { const text = f.input.value.trim(); if (!text) return; Store.update(NS, (s) => { s.pillars.find((x) => x.id === pid).goals.push({ id: uid(), text, done: false }); }); sh.close(); } })]);
+    const sh = sheet("Novo objetivo", [f, el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: guardClick(() => { const text = f.input.value.trim(); if (!text) return; Store.update(NS, (s) => { s.pillars.find((x) => x.id === pid).goals.push({ id: uid(), text, done: false }); }); sh.close(); }) })]);
     setTimeout(() => f.input.focus(), 50);
   }
   function editPillar(p) {
     const isNew = !p; const f = field("Nome do pilar", { value: p ? p.name : "", placeholder: "ex: Saúde, Conhecimento…" });
     const sh = sheet(isNew ? "Novo pilar" : "Editar pilar", [f, el("div", { class: "row", style: "gap:10px" }, [
       !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(p)); Store.update(NS, (s) => { s.pillars = s.pillars.filter((x) => x.id !== p.id); }); sh.close(); undo("Pilar apagado", () => Store.update(NS, (s) => { s.pillars.push(snap); })); } }) : null,
-      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => { const name = f.input.value.trim(); if (!name) return; Store.update(NS, (s) => { if (isNew) s.pillars.push({ id: uid(), name, goals: [] }); else s.pillars.find((x) => x.id === p.id).name = name; }); sh.close(); } }),
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => { const name = f.input.value.trim(); if (!name) return; Store.update(NS, (s) => { if (isNew) s.pillars.push({ id: uid(), name, goals: [] }); else s.pillars.find((x) => x.id === p.id).name = name; }); sh.close(); }) }),
     ])]);
   }
 

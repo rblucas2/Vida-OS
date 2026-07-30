@@ -212,6 +212,19 @@
 
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+  /** Protege um botão contra duplo-toque/duplo-clique (evita criar o mesmo registo 2x).
+   *  Desativa o botão de imediato; volta a ativá-lo passado `cooldownMs` (o botão pode já
+   *  não existir se o handler fechou um sheet — nesse caso não faz nada). */
+  function guardClick(fn, cooldownMs = 700) {
+    return function (e) {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+      setTimeout(() => { if (btn && btn.isConnected) btn.disabled = false; }, cooldownMs);
+      return fn(e);
+    };
+  }
+
   // Navegador de datas: ‹  [Hoje / data]  › — clicar no centro volta a hoje
   function dateNav(curIso, onChange) {
     const isToday = curIso === todayISO();
@@ -229,5 +242,5 @@
   }
 
   global.UI = { el, $, $$, clear, eur, eur0, num, todayISO, isoDate, monthKey, prettyDate, prettyMonth, MONTHS, DAYS, pad,
-    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, sparkBars, lineChart, colorFor, svgIcon, uid, dateNav };
+    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, sparkBars, lineChart, colorFor, svgIcon, uid, dateNav, guardClick };
 })(window);

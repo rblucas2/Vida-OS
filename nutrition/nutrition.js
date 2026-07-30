@@ -2,7 +2,7 @@
    Nutrição & Macros
    ===================================================================== */
 (function () {
-  const { el, $, clear, num, toast, undo, sheet, field, bar, ring, donut, uid, todayISO } = UI;
+  const { el, $, clear, num, toast, undo, sheet, field, bar, ring, donut, uid, todayISO, guardClick } = UI;
   const D = Domain;
   const NS = "nut";
 
@@ -276,7 +276,7 @@
     view.appendChild(el("div", { class: "stack" }, cards));
     if (nut.meals.length) {
       const qc = el("div", { class: "row wrap", style: "gap:8px;margin-top:12px" });
-      nut.meals.forEach((m) => qc.appendChild(el("button", { class: "pill on", text: "+ " + m.nome, onclick: () => logMeal(m) })));
+      nut.meals.forEach((m) => qc.appendChild(el("button", { class: "pill on", text: "+ " + m.nome, onclick: guardClick(() => logMeal(m)) })));
       view.appendChild(el("div", {}, [el("div", { class: "section-title", text: "Refeições rápidas" }), qc]));
     }
     view.appendChild(fab(() => addFoodSheet()));
@@ -351,7 +351,7 @@
     const s = sheet("Adicionar ao diário", [
       el("label", { class: "field" }, [el("span", { text: "Refeição" }), slotSeg]),
       scanBtn, search, results, gramsF, preview,
-      el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
+      el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: guardClick(() => {
         if (!selected) return toast("Escolhe um alimento.");
         const g = parseFloat(gramsF.input.value) || 0; if (g <= 0) return toast("Quantidade inválida.");
         Store.update(NS, (st) => {
@@ -359,7 +359,7 @@
           st.diary[viewDate].push({ id: uid(), slot, ...entryFromFood(selected, g) });
         });
         s.close(); toast("Adicionado ✓");
-      }}),
+      })}),
     ]);
   }
 
@@ -402,7 +402,7 @@
           ]),
           el("div", { style: "text-align:right" }, [
             el("div", { style: "font-weight:700", text: num(c.grams) + " g" }),
-            el("button", { class: "btn btn-soft btn-sm", text: "Adicionar", onclick: () => { addFromSolver(c); } }),
+            el("button", { class: "btn btn-soft btn-sm", text: "Adicionar", onclick: guardClick(() => { addFromSolver(c); }) }),
           ]),
         ]));
       });
@@ -586,13 +586,13 @@
         Store.update(NS, (st) => { st.foods = st.foods.filter((x) => x.id !== food.id); }); s.close();
         undo("Alimento apagado", () => Store.update(NS, (st) => { st.foods.unshift(snap); }));
       }}) : null,
-      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+      el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
         const data = { id: f.id || uid(), nome: fn.input.value.trim() || "Sem nome", categoria: fc.input.value.trim() || "Outros",
           calorias: +fk.input.value || 0, proteina: +fp.input.value || 0, hidratos: +fh.input.value || 0, gordura: +fg.input.value || 0,
           fibra: +fFib.input.value || 0, acucar: +fSug.input.value || 0, saturadas: +fSat.input.value || 0, sodio: +fSod.input.value || 0 };
         Store.update(NS, (st) => { const i = st.foods.findIndex((x) => x.id === data.id); if (i >= 0) st.foods[i] = data; else st.foods.unshift(data); });
         s.close(); toast("Guardado ✓");
-      }}),
+      })}),
     ]);
     const s = sheet(exists ? "Editar alimento" : "Novo alimento", [
       fn, fc, el("div", { class: "input-row" }, [fk, fp]), el("div", { class: "input-row" }, [fh, fg]),
@@ -614,7 +614,7 @@
         el("div", { class: "row", style: "justify-content:space-between" }, [
           el("strong", { text: m.nome }),
           el("div", { class: "row", style: "gap:6px" }, [
-            el("button", { class: "btn btn-soft btn-sm", text: "+ Diário", onclick: () => logMeal(m) }),
+            el("button", { class: "btn btn-soft btn-sm", text: "+ Diário", onclick: guardClick(() => logMeal(m)) }),
             el("button", { class: "btn btn-ghost btn-sm", text: "✎", onclick: () => editMeal(m) }),
           ]),
         ]),
@@ -645,11 +645,11 @@
       // mini seletor
       const sel = field("Alimento", { type: "select", options: Store.get(NS).foods.map((f) => ({ value: f.id, label: f.nome })) });
       const g = field("Gramas", { type: "number", value: 100, inputmode: "decimal" });
-      const s2 = sheet("Adicionar alimento", [sel, g, el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: () => {
+      const s2 = sheet("Adicionar alimento", [sel, g, el("button", { class: "btn btn-primary btn-block", text: "Adicionar", onclick: guardClick(() => {
         const food = Store.get(NS).foods.find((f) => f.id === sel.input.value); const grams = +g.input.value || 0;
         m.items.push(entryFromFood(food, grams));
         s2.close(); drawItems();
-      }})]);
+      })})]);
     }});
     const s = sheet(meal ? "Editar refeição" : "Nova refeição", [
       fn, el("div", { class: "section-title", style: "margin-top:8px", text: "Alimentos" }), itemsBox, addItem,
@@ -723,13 +723,13 @@
     const isToday = planDay === todayPlanDay();
     const syncNote = isToday
       ? el("p", { class: "tiny", style: "color:var(--good);text-align:center;font-weight:600", text: "🔄 Este dia sincroniza automaticamente com o Diário de hoje." })
-      : el("button", { class: "btn btn-primary btn-block", text: "↳ Copiar este dia para o diário de hoje", onclick: () => {
+      : el("button", { class: "btn btn-primary btn-block", text: "↳ Copiar este dia para o diário de hoje", onclick: guardClick(() => {
           const entries = [];
           PLAN_SLOTS.forEach((sl) => (dayPlan[sl.id] || []).forEach((e) => { if (e.kcal) entries.push({ ...e, slot: sl.id }); }));
           if (!entries.length) return toast("Nada com macros para copiar.");
           Store.update(NS, (s) => { s.diary[todayISO()] = s.diary[todayISO()] || []; entries.forEach((e) => s.diary[todayISO()].push({ id: uid(), slot: e.slot, foodId: e.foodId, nome: e.nome, grams: e.grams || 0, kcal: e.kcal, p: e.p, c: e.c, f: e.f, fib: e.fib || 0, sug: e.sug || 0, sat: e.sat || 0, sod: e.sod || 0 })); });
           toast(entries.length + " itens no diário de hoje ✓");
-        }});
+        })});
 
     view.appendChild(el("div", { class: "stack" }, [sel, totCard, ...slots, syncNote,
       el("p", { class: "tiny muted center", text: isToday ? "Adiciona ou remove aqui e o Diário de hoje atualiza-se sozinho." : "O plano é um modelo semanal reutilizável. Copia um dia para o diário quando o quiseres registar." })]));
@@ -764,19 +764,19 @@
         if (!nut.meals.length) { body.appendChild(el("div", { class: "empty tiny", text: "Sem refeições guardadas. Cria-as no separador Refeições." })); return; }
         nut.meals.forEach((m) => {
           const t = m.items.reduce((a, it) => ({ kcal: a.kcal + it.kcal, p: a.p + it.p, c: a.c + it.c, f: a.f + it.f }), { kcal: 0, p: 0, c: 0, f: 0 });
-          body.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => push({ kind: "meal", nome: m.nome, kcal: Math.round(t.kcal), p: +t.p.toFixed(1), c: +t.c.toFixed(1), f: +t.f.toFixed(1) }) }, [
+          body.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: guardClick(() => push({ kind: "meal", nome: m.nome, kcal: Math.round(t.kcal), p: +t.p.toFixed(1), c: +t.c.toFixed(1), f: +t.f.toFixed(1) })) }, [
             el("div", { class: "grow" }, [el("div", { class: "t", text: m.nome }), el("div", { class: "s", text: num(t.kcal) + " kcal" })]), el("span", { text: "+" })]));
         });
       } else if (mode === "food") {
         const search = field("Alimento", { placeholder: "Procurar…" });
         const g = field("Gramas", { type: "number", value: 100, inputmode: "decimal" });
         const res = el("div", { class: "list", style: "max-height:180px;overflow:auto" });
-        function draw() { clear(res); const q = search.input.value.toLowerCase(); nut.foods.filter((f) => f.nome.toLowerCase().includes(q)).slice(0, 20).forEach((f) => res.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: () => { const grams = parseFloat(g.input.value) || 100; push({ kind: "food", ...entryFromFood(f, grams), nome: `${f.nome} (${num(grams)}g)` }); } }, [el("div", { class: "grow t", text: f.nome }), el("span", { text: "+" })]))); }
+        function draw() { clear(res); const q = search.input.value.toLowerCase(); nut.foods.filter((f) => f.nome.toLowerCase().includes(q)).slice(0, 20).forEach((f) => res.appendChild(el("div", { class: "item", style: "cursor:pointer", onclick: guardClick(() => { const grams = parseFloat(g.input.value) || 100; push({ kind: "food", ...entryFromFood(f, grams), nome: `${f.nome} (${num(grams)}g)` }); }) }, [el("div", { class: "grow t", text: f.nome }), el("span", { text: "+" })]))); }
         search.input.addEventListener("input", draw); draw();
         body.appendChild(g); body.appendChild(search); body.appendChild(res);
       } else {
         const t = field("Nota", { placeholder: "ex: Sopa + fruta" });
-        body.appendChild(t); body.appendChild(el("button", { class: "btn btn-primary btn-block", style: "margin-top:10px", text: "Adicionar nota", onclick: () => { if (t.input.value.trim()) push({ kind: "text", nome: t.input.value.trim() }); } }));
+        body.appendChild(t); body.appendChild(el("button", { class: "btn btn-primary btn-block", style: "margin-top:10px", text: "Adicionar nota", onclick: guardClick(() => { if (t.input.value.trim()) push({ kind: "text", nome: t.input.value.trim() }); }) }));
       }
     }
     drawBody();
