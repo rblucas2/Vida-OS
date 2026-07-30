@@ -339,6 +339,33 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .weekpills{display:flex;gap:5px;margin-bottom:16px}
 .wpill{flex:1;text-align:center;padding:7px 2px;border-radius:9px;font-size:10.5px;font-weight:700;color:var(--text-faint);background:var(--surface);border:1px solid var(--line)}
 .wpill.today{color:var(--stretch);border-color:var(--stretch);background:rgba(125,211,192,.1)}
+
+/* ---------- Biblioteca / trocar exercício / criar plano ---------- */
+.swap-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--surface);border:1.5px solid var(--line);color:var(--text-dim);border-radius:11px;padding:10px 14px;margin:0 0 10px;font-size:13px;font-weight:650}
+.swap-btn:active{transform:scale(.99)}
+.lib-search{width:100%;padding:11px 14px;border-radius:11px;background:var(--surface);border:1px solid var(--line);color:var(--text);font-size:14px;margin-bottom:12px}
+.lib-search::placeholder{color:var(--text-faint)}
+.ovl{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+.ovl-panel{background:var(--bg);width:100%;max-width:680px;max-height:88vh;border-radius:20px 20px 0 0;overflow:hidden;display:flex;flex-direction:column;animation:slideup .2s ease}
+@keyframes slideup{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.ovl-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);flex-shrink:0}
+.ovl-title{font-size:15.5px;font-weight:750;letter-spacing:-.2px}
+.ovl-close{font-size:18px;color:var(--text-dim);padding:4px 8px}
+.ovl-body{overflow-y:auto;padding:14px 18px 28px}
+.ovl-tabs{display:flex;gap:6px;margin-bottom:4px}
+.ovl-tab{padding:7px 13px;border-radius:20px;font-size:12px;font-weight:650;background:var(--surface);border:1px solid var(--line);color:var(--text-dim)}
+.ovl-tab.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.lib-item{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.lib-item:last-child{border-bottom:none}
+.li-thumb{width:38px;height:54px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#0c1117}
+.li-thumb svg{width:100%;height:100%;display:block}
+.lib-info{flex:1;min-width:0}
+.lib-nm{font-size:13.5px;font-weight:650}
+.lib-tag{font-size:10.5px;color:var(--text-faint);margin-top:2px;font-weight:650;text-transform:uppercase;letter-spacing:.3px}
+.lib-cue{font-size:11.5px;color:var(--text-dim);margin-top:4px;line-height:1.4}
+.lib-add{width:28px;height:28px;border-radius:50%;background:var(--surface-2);color:var(--accent);display:grid;place-items:center;font-size:14px;flex-shrink:0}
+.pb-chip{display:inline-flex;align-items:center;gap:7px;background:var(--accent-soft);color:var(--accent);border-radius:20px;padding:7px 8px 7px 13px;font-size:12.5px;font-weight:650;margin:0 6px 8px 0}
+.pb-chip button{font-size:14px;line-height:1;color:var(--accent)}
 </style>
 </head>
 <body>
@@ -359,6 +386,12 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
 <!-- ============ PROGRESS ============ -->
 <div class="view" id="view-progress"></div>
+
+<!-- ============ BIBLIOTECA ============ -->
+<div class="view" id="view-library"></div>
+
+<!-- ============ CRIAR PLANO ============ -->
+<div class="view" id="view-builder"></div>
 
 <!-- ============ MENU ============ -->
 <div class="view" id="view-menu"></div>
@@ -632,6 +665,43 @@ const STRETCH_PLAN = {
 // meta semanal: 3× força (PPL) + 2× pliometria, conforme o plano sugerido no Menu
 const WEEKLY_GOAL = 5;
 
+/* ============================================================
+   BIBLIOTECA DE EXERCÍCIOS — junta ginásio (PPL), pliometria e
+   corretivo num catálogo único, usado para trocar exercícios e
+   para montar planos personalizados.
+   ============================================================ */
+function slug(s){ return s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+function buildLibrary(){
+  const lib = [];
+  const seen = new Set();
+  for(const k in STRENGTH){
+    STRENGTH[k].exercises.forEach(ex=>{
+      if(seen.has(ex.id)) return; seen.add(ex.id);
+      lib.push({id:ex.id, n:ex.n, cat:'ginasio', catLabel:'Ginásio', m:ex.m, front:ex.front, cue:ex.cue, range:ex.range, sets:ex.sets, rest:ex.rest});
+    });
+  }
+  for(const k in PLYO){
+    PLYO[k].exercises.forEach((ex,i)=>{
+      const id = 'plyo_'+k+'_'+slug(ex.n);
+      if(seen.has(id)) return; seen.add(id);
+      lib.push({id, n:ex.n, cat:'pliometria', catLabel:'Pliometria', m:null, front:1, cue:ex.cue, t:ex.t, range:ex.t, sets:3, rest:120});
+    });
+  }
+  for(const k in SUPPORT){
+    (SUPPORT[k].corrective||[]).forEach(ex=>{
+      const id = 'cor_'+slug(ex.n);
+      if(seen.has(id)) return; seen.add(id);
+      lib.push({id, n:ex.n, cat:'correcao', catLabel:'Correção', m:null, front:1, cue:ex.cue, t:ex.t, range:ex.t, sets:3, rest:60});
+    });
+  }
+  return lib;
+}
+const EXERCISE_LIBRARY = buildLibrary();
+function libFind(id){
+  return EXERCISE_LIBRARY.find(e=>e.id===id)
+    || (STATE.customPlans && Object.values(STATE.customPlans).flatMap(p=>p.exercises).find(e=>e.id===id));
+}
+
 /* helper para passar strings em atributos onclick sem conflito de aspas */
 function esc(s){ return s.replace(/'/g,"\\'"); }
 
@@ -642,6 +712,8 @@ let STATE = {
   log: {},          // { 'YYYY-MM-DD': [ {plan, name, volume, sets} ] }
   current: null,    // sessão ativa
   videos: {},       // { exerciseId: url }
+  customPlans: {},  // { planId: {id, name, icon, color, exercises:[...]} }
+  swaps: {},        // { planKey: { exerciseIndex: exerciseObj } } — trocas persistentes por plano
 };
 
 // data local (não UTC) — evita trocar de dia à volta da meia-noite em GMT+1
@@ -675,6 +747,8 @@ async function loadState(){
   if(!STATE.lastLoads) STATE.lastLoads = {};
   if(!STATE.stretchLog) STATE.stretchLog = {};
   if(!STATE.records) STATE.records = {};
+  if(!STATE.customPlans) STATE.customPlans = {};
+  if(!STATE.swaps) STATE.swaps = {};
 }
 async function saveState(){
   try{
@@ -810,6 +884,23 @@ function renderHome(){
     </button>`;
   }
 
+  if(STATE.customPlans && Object.keys(STATE.customPlans).length){
+    html += `<div class="sec-label">🛠️ Planos personalizados</div>`;
+    for(const id in STATE.customPlans){
+      const p = STATE.customPlans[id];
+      html += `<button class="day-card" onclick="openSession('custom_${id}')" style="width:100%;text-align:left">
+        <div class="bar" style="background:${p.color||'var(--accent)'}"></div>
+        <div class="icon" style="background:linear-gradient(135deg,${p.color||'var(--accent)'}40,${p.color||'var(--accent)'}14);color:${p.color||'var(--accent)'}">${p.icon||'🛠️'}</div>
+        <div class="info"><h3>${p.name}</h3><p>${p.exercises.length} exercícios · plano personalizado</p></div>
+        <div class="chev">›</div>
+      </button>`;
+    }
+  }
+  html += `<button class="day-card" onclick="openBuilder()" style="width:100%;text-align:left;border-style:dashed">
+    <div class="icon" style="background:var(--surface-2);color:var(--text-dim)">+</div>
+    <div class="info"><h3>Criar plano personalizado</h3><p>Escolhe exercícios da biblioteca e monta o teu treino</p></div>
+  </button>`;
+
   $('#view-home').innerHTML = html;
 }
 
@@ -818,7 +909,31 @@ function renderHome(){
    ============================================================ */
 function getPlan(key){
   if(key.startsWith('plyo_')) return {type:'plyo', data:PLYO[key.slice(5)], key};
-  return {type:'strength', data:STRENGTH[key], key};
+  if(key.startsWith('custom_')){
+    const cp = STATE.customPlans && STATE.customPlans[key.slice(7)];
+    if(!cp) return {type:'strength', data:{name:'Plano apagado', color:'var(--accent)', icon:'⚠️', exercises:[]}, key};
+    return {type:'strength', data:{...cp, exercises: applySwaps(key, cp.exercises)}, key};
+  }
+  return {type:'strength', data:{...STRENGTH[key], exercises: applySwaps(key, STRENGTH[key].exercises)}, key};
+}
+
+// aplica trocas de exercício persistentes (por posição no plano) guardadas em STATE.swaps
+function applySwaps(planKey, exercises){
+  const swaps = (STATE.swaps && STATE.swaps[planKey]) || {};
+  return exercises.map((ex,i)=> swaps[i] || ex);
+}
+function swapExercise(planKey, idx, libId){
+  const lib = libFind(libId);
+  if(!lib) return;
+  const base = getPlan(planKey).data.exercises[idx] || {};
+  STATE.swaps = STATE.swaps || {};
+  STATE.swaps[planKey] = STATE.swaps[planKey] || {};
+  STATE.swaps[planKey][idx] = {
+    id: lib.id, n: lib.n, m: lib.m||null, front: lib.front!=null?lib.front:1,
+    cue: lib.cue, range: lib.range || base.range || '3 × 6-12',
+    sets: lib.sets || base.sets || 3, rest: lib.rest || base.rest || 90,
+  };
+  saveState();
 }
 
 function openSession(key, forceNew){
@@ -882,7 +997,7 @@ function renderSession(){
   html += `<div class="order-hint">Ordem do treino: Aquecimento → ${plan.type==='strength'?'Força':'Pliometria'} → Corretivo → Alongamento</div>`;
 
   const mainLabel = plan.type==='strength' ? '💪 Força' : '⚡ Pliometria';
-  const mainCards = d.exercises.map((ex,i)=> exerciseCard(ex, i, plan.type)).join('');
+  const mainCards = d.exercises.map((ex,i)=> exerciseCard(ex, i, plan.type, plan.key)).join('');
 
   // 1º AQUECIMENTO (aberto — é por onde começas)
   if(support){
@@ -921,7 +1036,7 @@ function accordion(label, title, sub, color, inner, open){
   </div>`;
 }
 
-function exerciseCard(ex, idx, type){
+function exerciseCard(ex, idx, type, planKey){
   const cur = STATE.current;
   const saved = cur.sets[ex.id] || [];
   const isWeight = (type==='strength');
@@ -938,6 +1053,7 @@ function exerciseCard(ex, idx, type){
     <div class="ex-detail"><div class="ex-detail-in">
       <div class="cue">${ex.cue}</div>
       ${videoBlock(ex.id||'pl'+idx, ex.n)}
+      ${ isWeight && planKey ? `<button class="swap-btn" onclick="event.stopPropagation();openSwapPicker('${planKey}',${idx})">🔁 Trocar exercício</button>` : '' }
       ${ isWeight ? setsBlock(ex) : timedBlock(ex, type) }
     </div></div>
   </div>`;
@@ -1084,6 +1200,14 @@ function findEx(exid){
     const e = STRENGTH[k].exercises.find(x=>x.id===exid);
     if(e) return e;
   }
+  if(STATE.customPlans){
+    for(const id in STATE.customPlans){
+      const e = STATE.customPlans[id].exercises.find(x=>x.id===exid);
+      if(e) return e;
+    }
+  }
+  const lib = EXERCISE_LIBRARY.find(e=>e.id===exid);
+  if(lib) return lib;
   return {id:exid,sets:3};
 }
 
@@ -1094,6 +1218,162 @@ function saveVideo(id){
   if(url){ STATE.videos[id]=url; toast('Vídeo guardado'); }
   else { delete STATE.videos[id]; }
   saveState();
+}
+
+/* ============================================================
+   OVERLAY genérico (picker de exercícios / troca)
+   ============================================================ */
+function openOverlay(title, bodyHtml){
+  closeOverlay();
+  const ov = document.createElement('div');
+  ov.className='ovl'; ov.id='ovl';
+  ov.onclick = (e)=>{ if(e.target===ov) closeOverlay(); };
+  ov.innerHTML = `<div class="ovl-panel">
+    <div class="ovl-head"><div class="ovl-title">${title}</div><button class="ovl-close" onclick="closeOverlay()">✕</button></div>
+    <div class="ovl-body" id="ovlBody">${bodyHtml}</div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+function closeOverlay(){ const ov=document.getElementById('ovl'); if(ov) ov.remove(); }
+
+let PICKER = null;
+function openSwapPicker(planKey, idx){
+  const current = getPlan(planKey).data.exercises[idx];
+  PICKER = { mode:'swap', planKey, idx, cat:'ginasio', q:'', excludeId:current.id, title:'Trocar: '+current.n };
+  renderPicker();
+}
+function openBuildPicker(){
+  PICKER = { mode:'build', cat:'ginasio', q:'', excludeId:null, title:'Adicionar exercício' };
+  renderPicker();
+}
+function pickerThumb(e){
+  if(e.m) return bodySVG(e.m);
+  return `<div style="width:100%;height:100%;display:grid;place-items:center;font-size:16px;background:#0c1117">${e.cat==='pliometria'?'⚡':'🩹'}</div>`;
+}
+function renderPicker(){
+  if(!PICKER) return;
+  const list = EXERCISE_LIBRARY.filter(e=> e.cat===PICKER.cat && e.id!==PICKER.excludeId && (!PICKER.q || e.n.toLowerCase().includes(PICKER.q.toLowerCase())));
+  const rows = list.map(e=> `<div class="lib-item" onclick="choosePickerExercise('${e.id}')">
+      <div class="li-thumb">${pickerThumb(e)}</div>
+      <div class="lib-info"><div class="lib-nm">${e.n}</div><div class="lib-tag">${e.catLabel}</div><div class="lib-cue">${(e.cue||'').slice(0,72)}${(e.cue||'').length>72?'…':''}</div></div>
+      <div class="lib-add">${PICKER.mode==='swap'?'🔁':'+'}</div>
+    </div>`).join('') || '<p class="tiny" style="color:var(--text-faint);padding:24px 4px;text-align:center">Sem exercícios nesta categoria.</p>';
+  const cats = [['ginasio','Ginásio'],['pliometria','Pliometria'],['correcao','Correção']];
+  const body = `<input class="lib-search" placeholder="Procurar exercício…" value="${(PICKER.q||'').replace(/"/g,'&quot;')}" oninput="PICKER.q=this.value;renderPicker()">
+    <div class="ovl-tabs">${cats.map(([c,l])=>`<button class="ovl-tab ${PICKER.cat===c?'active':''}" onclick="PICKER.cat='${c}';renderPicker()">${l}</button>`).join('')}</div>
+    <div>${rows}</div>`;
+  openOverlay(PICKER.title, body);
+}
+function choosePickerExercise(libId){
+  if(!PICKER) return;
+  if(PICKER.mode==='swap'){
+    swapExercise(PICKER.planKey, PICKER.idx, libId);
+    closeOverlay(); PICKER=null;
+    renderSession(); bindAccordions();
+    toast('Exercício trocado 🔁');
+  } else if(PICKER.mode==='build'){
+    addToBuilder(libId);
+  }
+}
+
+/* ============================================================
+   BIBLIOTECA (vista de consulta — ginásio, pliometria, correção)
+   ============================================================ */
+let LIB_FILTER = { cat:'ginasio', q:'' };
+function openLibrary(){
+  renderLibraryView();
+  nav('library');
+  $$('.navbtn').forEach(b=>b.classList.remove('active'));
+}
+function renderLibraryView(){
+  const list = EXERCISE_LIBRARY.filter(e=> e.cat===LIB_FILTER.cat && (!LIB_FILTER.q || e.n.toLowerCase().includes(LIB_FILTER.q.toLowerCase())));
+  const cats = [['ginasio','🏋️ Ginásio'],['pliometria','⚡ Pliometria'],['correcao','🩹 Correção']];
+  const rows = list.map(e=> libraryCard(e)).join('') || '<p class="tiny" style="color:var(--text-faint);padding:24px 4px;text-align:center">Sem exercícios.</p>';
+  const html = `
+    <button class="backlink" onclick="nav('menu')">‹ Voltar</button>
+    <div class="sec-label">📚 Biblioteca de exercícios</div>
+    <input class="lib-search" placeholder="Procurar exercício…" value="${(LIB_FILTER.q||'').replace(/"/g,'&quot;')}" oninput="LIB_FILTER.q=this.value;renderLibraryView()">
+    <div class="ovl-tabs" style="margin-bottom:14px">${cats.map(([c,l])=>`<button class="ovl-tab ${LIB_FILTER.cat===c?'active':''}" onclick="LIB_FILTER.cat='${c}';renderLibraryView()">${l}</button>`).join('')}</div>
+    ${rows}
+  `;
+  $('#view-library').innerHTML = html;
+}
+function libraryCard(e){
+  const q = encodeURIComponent(e.n+' exercise proper form');
+  return `<div class="ex" id="lex-${e.id}">
+    <div class="ex-head" onclick="toggleEx(this)">
+      <div class="ex-thumb">${pickerThumb(e)}</div>
+      <div class="ex-meta"><div class="nm">${e.n}</div><div class="rg">${e.catLabel}${e.m?' · '+e.m.join(', '):''}</div></div>
+      <div class="ex-toggle">+</div>
+    </div>
+    <div class="ex-detail"><div class="ex-detail-in">
+      <div class="cue">${e.cue||'Sem descrição.'}</div>
+      <a class="vidlink demo" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener"><span class="play">▶</span> Ver demonstração</a>
+    </div></div>
+  </div>`;
+}
+
+/* ============================================================
+   CONSTRUTOR DE PLANOS PERSONALIZADOS
+   ============================================================ */
+let BUILDER = null;
+function openBuilder(existingId){
+  if(existingId && STATE.customPlans[existingId]){
+    const cp = STATE.customPlans[existingId];
+    BUILDER = { id:existingId, name:cp.name, icon:cp.icon||'🛠️', color:cp.color||'var(--accent)', exercises:[...cp.exercises] };
+  } else {
+    BUILDER = { id:null, name:'', icon:'🛠️', color:'var(--accent)', exercises:[] };
+  }
+  renderBuilder();
+  nav('builder');
+  $$('.navbtn').forEach(b=>b.classList.remove('active'));
+}
+function renderBuilder(){
+  if(!BUILDER) return;
+  const chips = BUILDER.exercises.map((e,i)=>`<span class="pb-chip">${e.n}<button onclick="removeFromBuilder(${i})">✕</button></span>`).join('') || '<p class="tiny" style="color:var(--text-faint)">Ainda sem exercícios — toca em "Adicionar exercício".</p>';
+  const html = `
+    <button class="backlink" onclick="nav('menu')">‹ Voltar</button>
+    <div class="sec-label">${BUILDER.id?'Editar plano personalizado':'Novo plano de treino'}</div>
+    <input class="lib-search" id="pbName" placeholder="Nome do plano (ex: Braços extra)" value="${(BUILDER.name||'').replace(/"/g,'&quot;')}" oninput="BUILDER.name=this.value">
+    <div class="sec-label" style="margin-top:16px">Exercícios (${BUILDER.exercises.length})</div>
+    <div style="margin-bottom:6px">${chips}</div>
+    <button class="swap-btn" style="border-color:var(--accent);color:var(--accent)" onclick="openBuildPicker()">+ Adicionar exercício</button>
+    <button class="finish-btn" style="margin-top:22px" onclick="saveBuilderPlan()">Guardar plano</button>
+    ${BUILDER.id?`<button class="finish-btn ghost" style="margin-top:10px;color:#e8503a" onclick="deleteCustomPlan('${BUILDER.id}')">Apagar plano</button>`:''}
+  `;
+  $('#view-builder').innerHTML = html;
+}
+function addToBuilder(libId){
+  const lib = libFind(libId);
+  if(!lib || !BUILDER) return;
+  if(BUILDER.exercises.some(e=>e.id===lib.id)){ toast('Já está no plano'); return; }
+  BUILDER.exercises.push({ id:lib.id, n:lib.n, m:lib.m||null, front: lib.front!=null?lib.front:1, cue:lib.cue, range: lib.range||'3 × 8-12', sets: lib.sets||3, rest: lib.rest||90 });
+  renderBuilder();
+  toast('Adicionado: '+lib.n);
+}
+function removeFromBuilder(i){ BUILDER.exercises.splice(i,1); renderBuilder(); }
+function saveBuilderPlan(){
+  const nameInp = document.getElementById('pbName');
+  const name = (nameInp?nameInp.value:BUILDER.name||'').trim();
+  if(!name) return toast('Dá um nome ao plano.');
+  if(!BUILDER.exercises.length) return toast('Adiciona pelo menos um exercício.');
+  const id = BUILDER.id || ('p'+Date.now().toString(36));
+  STATE.customPlans = STATE.customPlans || {};
+  const prev = STATE.customPlans[id];
+  STATE.customPlans[id] = { id, name, icon: BUILDER.icon||'🛠️', color: BUILDER.color||'var(--accent)', exercises: BUILDER.exercises, createdAt: prev?prev.createdAt:Date.now() };
+  saveState();
+  toast('Plano guardado ✓');
+  BUILDER = null;
+  nav('home');
+}
+function deleteCustomPlan(id){
+  if(!confirm('Apagar este plano personalizado? O histórico de treinos já registados mantém-se.')) return;
+  delete STATE.customPlans[id];
+  if(STATE.swaps) delete STATE.swaps['custom_'+id];
+  saveState();
+  BUILDER = null;
+  toast('Plano apagado');
+  nav('home');
 }
 
 /* ============================================================
@@ -1522,6 +1802,12 @@ function renderMenu(){
     Esta app junta os teus <b>4 planos</b> num só sítio: força (PPL), aquecimento, corretivo e alongamento — mais um plano de <b>pliometria</b> 2×/semana para o futebol. Os dados ficam guardados neste dispositivo.
   </div>
 
+  <div class="sec-label">Planos</div>
+  <div class="set-card">
+    <button class="set-item" onclick="openLibrary()"><div class="si-ic">📚</div><div class="si-tx"><div class="a">Biblioteca de exercícios</div><div class="b">Ginásio, pliometria e correção — dica de execução + vídeo</div></div><div class="si-ar">›</div></button>
+    <button class="set-item" onclick="openBuilder()"><div class="si-ic">🛠️</div><div class="si-tx"><div class="a">Criar plano personalizado</div><div class="b">Monta o teu próprio treino a partir da biblioteca</div></div><div class="si-ar">›</div></button>
+  </div>
+
   <div class="sec-label">Plano semanal sugerido</div>
   <div class="set-card">
     <div class="set-item"><div class="si-ic">💪</div><div class="si-tx"><div class="a">Força — Push / Pull / Legs</div><div class="b">3×/semana · com suporte integrado</div></div></div>
@@ -1569,7 +1855,7 @@ function toggleInstall(which){
 }
 
 function exportData(){
-  const data = JSON.stringify({log:STATE.log, videos:STATE.videos, lastLoads:STATE.lastLoads, stretchLog:STATE.stretchLog, records:STATE.records});
+  const data = JSON.stringify({log:STATE.log, videos:STATE.videos, lastLoads:STATE.lastLoads, stretchLog:STATE.stretchLog, records:STATE.records, customPlans:STATE.customPlans, swaps:STATE.swaps});
   navigator.clipboard?.writeText(data).then(
     ()=>toast('Dados copiados para a área de transferência'),
     ()=>prompt('Copia os teus dados:', data)
@@ -1585,6 +1871,8 @@ function importData(){
     if(d.lastLoads) STATE.lastLoads = {...STATE.lastLoads, ...d.lastLoads};
     if(d.stretchLog) STATE.stretchLog = {...STATE.stretchLog, ...d.stretchLog};
     if(d.records) STATE.records = {...STATE.records, ...d.records};
+    if(d.customPlans) STATE.customPlans = {...STATE.customPlans, ...d.customPlans};
+    if(d.swaps) STATE.swaps = {...STATE.swaps, ...d.swaps};
     saveState(); toast('Dados importados ✓'); renderMenu();
   }catch(e){ toast('Dados inválidos'); }
 }
