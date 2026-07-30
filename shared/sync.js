@@ -67,25 +67,42 @@
   const NAME_ARRAYS = { fin: ["categories"] };
   const KEYED_OBJ = { fin: ["budgets", "categoryRules", "nwHistory"], nut: ["diary", "workoutDays", "weightLog", "mealPlan"], los: ["days", "habitLog", "reviews", "journal"] };
 
-  function mergeArrayBy(out, older, key, keyOf) {
-    const arr = Array.isArray(out[key]) ? out[key] : [];
+  // Une os "_tomb" (ids apagados) de dois estados, mantendo o carimbo mais recente por id.
+  function mergeTomb(a, b) {
+    const out = {};
+    [a && a._tomb, b && b._tomb].forEach((tomb) => {
+      for (const key in tomb || {}) {
+        out[key] = out[key] || {};
+        for (const id in tomb[key]) out[key][id] = Math.max(out[key][id] || 0, tomb[key][id]);
+      }
+    });
+    return out;
+  }
+
+  function mergeArrayBy(out, older, key, keyOf, tomb) {
+    let arr = Array.isArray(out[key]) ? out[key] : [];
     const seen = new Set(arr.map((x) => x && keyOf(x)));
-    (older[key] || []).forEach((x) => { if (x && !seen.has(keyOf(x))) arr.push(x); });
+    (older[key] || []).forEach((x) => { const id = x && keyOf(x); if (id != null && !seen.has(id)) { arr.push(x); seen.add(id); } });
+    const dead = tomb && tomb[key];
+    if (dead) arr = arr.filter((x) => !(x && dead[String(keyOf(x))] != null));
     out[key] = arr;
   }
 
-  /** Merge sem perdas: base = estado mais recente; acrescenta itens/chaves que só existem no outro. */
+  /** Merge sem perdas: base = estado mais recente; acrescenta itens/chaves que só existem no outro
+   *  (exceto itens marcados como apagados em "_tomb", para não os "ressuscitar"). */
   function mergeStates(ns, local, remote) {
     const remoteNewer = (remote._updatedAt || 0) >= (local._updatedAt || 0);
     const newer = remoteNewer ? remote : local, older = remoteNewer ? local : remote;
     const out = JSON.parse(JSON.stringify(newer));
-    (ID_ARRAYS[ns] || []).forEach((key) => mergeArrayBy(out, older, key, (x) => x.id));
-    (NAME_ARRAYS[ns] || []).forEach((key) => mergeArrayBy(out, older, key, (x) => x.name));
+    const tomb = mergeTomb(newer, older);
+    (ID_ARRAYS[ns] || []).forEach((key) => mergeArrayBy(out, older, key, (x) => x.id, tomb));
+    (NAME_ARRAYS[ns] || []).forEach((key) => mergeArrayBy(out, older, key, (x) => x.name, tomb));
     (KEYED_OBJ[ns] || []).forEach((key) => {
       const obj = out[key] && typeof out[key] === "object" ? out[key] : {}; const old = older[key] || {};
       for (const k in old) if (!(k in obj)) obj[k] = old[k];
       out[key] = obj;
     });
+    if (Object.keys(tomb).length) out._tomb = tomb;
     out._updatedAt = Math.max(local._updatedAt || 0, remote._updatedAt || 0);
     return out;
   }

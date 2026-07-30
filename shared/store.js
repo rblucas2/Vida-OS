@@ -37,6 +37,38 @@
     (listeners["*"] || []).forEach((fn) => { try { fn(ns, cache[ns]); } catch (e) { console.error(e); } });
   }
 
+  // ---- Tombstones (evita que a sincronização "ressuscite" itens apagados) ----
+  // Para cada array de nível 1 cujos itens tenham "id" (habits, transactions, foods, …),
+  // regista em data._tomb[key][id] quando um id desaparece do array. O sync.js usa isto
+  // para não voltar a inserir esse item ao fazer merge com um dispositivo desatualizado.
+  function snapshotIds(data) {
+    const out = {};
+    for (const k in data) {
+      const v = data[k];
+      if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object" && "id" in x)) {
+        out[k] = new Set(v.map((x) => String(x.id)));
+      }
+    }
+    return out;
+  }
+
+  function trackTombstones(data, before) {
+    for (const k in before) {
+      const v = data[k];
+      const afterIds = new Set(Array.isArray(v) ? v.map((x) => x && String(x.id)) : []);
+      const removed = [...before[k]].filter((id) => !afterIds.has(id));
+      if (removed.length) {
+        data._tomb = data._tomb || {};
+        data._tomb[k] = data._tomb[k] || {};
+        removed.forEach((id) => { data._tomb[k][id] = Date.now(); });
+      }
+      if (data._tomb && data._tomb[k]) {
+        // item reapareceu (ex: undo) -> deixa de estar apagado
+        afterIds.forEach((id) => { if (data._tomb[k][id]) delete data._tomb[k][id]; });
+      }
+    }
+  }
+
   const Store = {
     /** Lê o objeto de estado de um namespace (referência viva). */
     get(ns) { return load(ns); },
@@ -44,7 +76,9 @@
     /** Atualiza via função mutadora: Store.update('fin', s => { s.x = 1 }) */
     update(ns, mutator, opts) {
       const data = load(ns);
+      const before = snapshotIds(data);
       mutator(data);
+      trackTombstones(data, before);
       data._updatedAt = Date.now();
       save(ns, opts);
       return data;
