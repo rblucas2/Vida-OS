@@ -44,9 +44,11 @@
   // Constrói uma entrada de diário (macros + micros) a partir de um alimento e gramas
   function entryFromFood(food, grams) {
     const k = grams / 100;
-    return { foodId: food.id, nome: food.nome, grams,
+    const entry = { foodId: food.id, nome: food.nome, grams,
       kcal: Math.round(food.calorias * k), p: +(food.proteina * k).toFixed(1), c: +(food.hidratos * k).toFixed(1), f: +(food.gordura * k).toFixed(1),
       fib: +((food.fibra || 0) * k).toFixed(1), sug: +((food.acucar || 0) * k).toFixed(1), sat: +((food.saturadas || 0) * k).toFixed(1), sod: Math.round((food.sodio || 0) * k) };
+    D.EXTRA_MICROS.forEach((m) => { entry[m.id] = +((food[m.id] || 0) * k).toFixed(2); });
+    return entry;
   }
 
   const PLAN_DAYS = [
@@ -230,6 +232,9 @@
         nutrientRow("Açúcar", got.sug, REF.sug, "g", "limit"),
         nutrientRow("Gordura saturada", got.sat, REF.sat, "g", "limit"),
         nutrientRow("Sódio", got.sod, REF.sod, "mg", "limit"),
+        // Vitaminas/minerais extra: só aparecem no resumo se hoje tiveres comido alguma coisa
+        // com esse dado preenchido — não faz sentido mostrar sempre 8 barras a 0.
+        ...D.EXTRA_MICROS.filter((m) => got[m.id] > 0).map((m) => nutrientRow(m.label, got[m.id], m.ref, m.unit, "goal")),
       ]),
     ]));
 
@@ -598,6 +603,10 @@
     const fSug = field("Açúcar /100g", { type: "number", value: f.acucar != null ? f.acucar : "", inputmode: "decimal" });
     const fSat = field("Saturadas /100g", { type: "number", value: f.saturadas != null ? f.saturadas : "", inputmode: "decimal" });
     const fSod = field("Sódio mg /100g", { type: "number", value: f.sodio != null ? f.sodio : "", inputmode: "decimal" });
+    // Vitaminas/minerais — totalmente opcionais, ficam a 0 (sem efeito) se não forem preenchidos.
+    const extraFields = D.EXTRA_MICROS.map((m) => field(`${m.label} (${m.unit}) /100g`, { type: "number", value: f[m.id] != null ? f[m.id] : "", inputmode: "decimal" }));
+    const extraRows = [];
+    for (let i = 0; i < extraFields.length; i += 2) extraRows.push(el("div", { class: "input-row", style: "margin-top:8px" }, extraFields.slice(i, i + 2)));
     const buttons = el("div", { class: "row", style: "gap:10px" }, [
       exists ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => {
         const snap = JSON.parse(JSON.stringify(food));
@@ -608,6 +617,7 @@
         const data = { id: f.id || uid(), nome: fn.input.value.trim() || "Sem nome", categoria: fc.input.value.trim() || "Outros",
           calorias: +fk.input.value || 0, proteina: +fp.input.value || 0, hidratos: +fh.input.value || 0, gordura: +fg.input.value || 0,
           fibra: +fFib.input.value || 0, acucar: +fSug.input.value || 0, saturadas: +fSat.input.value || 0, sodio: +fSod.input.value || 0 };
+        D.EXTRA_MICROS.forEach((m, i) => { data[m.id] = +extraFields[i].input.value || 0; });
         Store.update(NS, (st) => { const i = st.foods.findIndex((x) => x.id === data.id); if (i >= 0) st.foods[i] = data; else st.foods.unshift(data); });
         s.close(); toast("Guardado ✓");
       })}),
@@ -615,7 +625,10 @@
     const s = sheet(exists ? "Editar alimento" : "Novo alimento", [
       fn, fc, el("div", { class: "input-row" }, [fk, fp]), el("div", { class: "input-row" }, [fh, fg]),
       el("details", { style: "margin-top:2px" }, [el("summary", { class: "tiny muted", style: "cursor:pointer", text: "Micronutrientes (opcional)" }),
-        el("div", { class: "input-row", style: "margin-top:8px" }, [fFib, fSug]), el("div", { class: "input-row", style: "margin-top:8px" }, [fSat, fSod])]),
+        el("div", { class: "input-row", style: "margin-top:8px" }, [fFib, fSug]), el("div", { class: "input-row", style: "margin-top:8px" }, [fSat, fSod]),
+        el("p", { class: "tiny muted", style: "margin:10px 0 0", text: "Vitaminas e minerais — só preenche as que fizerem sentido para este alimento." }),
+        ...extraRows,
+      ]),
       buttons,
     ]);
   }

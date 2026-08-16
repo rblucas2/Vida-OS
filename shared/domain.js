@@ -62,13 +62,31 @@
     return false;
   }
 
+  // Micronutrientes extra OPCIONAIS (nem todos os alimentos precisam de os ter preenchidos —
+  // ficam a 0 quando não foram definidos nesse alimento). Valores de referência diária (NRV/EU,
+  // adulto) tal como aparecem nos rótulos europeus.
+  const EXTRA_MICROS = [
+    { id: "vitD", label: "Vitamina D", unit: "µg", ref: 5 },
+    { id: "vitE", label: "Vitamina E", unit: "mg", ref: 12 },
+    { id: "vitC", label: "Vitamina C", unit: "mg", ref: 80 },
+    { id: "magnesio", label: "Magnésio", unit: "mg", ref: 375 },
+    { id: "ferro", label: "Ferro", unit: "mg", ref: 14 },
+    { id: "calcio", label: "Cálcio", unit: "mg", ref: 800 },
+    { id: "potassio", label: "Potássio", unit: "mg", ref: 2000 },
+    { id: "zinco", label: "Zinco", unit: "mg", ref: 10 },
+  ];
+
   /** Soma de macros e micronutrientes consumidos num dia. */
   function dayIntake(nut, dateISO = todayISO()) {
     const items = (nut.diary && nut.diary[dateISO]) || [];
-    return items.reduce((a, it) => ({
-      kcal: a.kcal + (it.kcal || 0), p: a.p + (it.p || 0), c: a.c + (it.c || 0), f: a.f + (it.f || 0),
-      fib: a.fib + (it.fib || 0), sug: a.sug + (it.sug || 0), sat: a.sat + (it.sat || 0), sod: a.sod + (it.sod || 0),
-    }), { kcal: 0, p: 0, c: 0, f: 0, fib: 0, sug: 0, sat: 0, sod: 0 });
+    const base = { kcal: 0, p: 0, c: 0, f: 0, fib: 0, sug: 0, sat: 0, sod: 0 };
+    EXTRA_MICROS.forEach((m) => { base[m.id] = 0; });
+    return items.reduce((a, it) => {
+      a.kcal += it.kcal || 0; a.p += it.p || 0; a.c += it.c || 0; a.f += it.f || 0;
+      a.fib += it.fib || 0; a.sug += it.sug || 0; a.sat += it.sat || 0; a.sod += it.sod || 0;
+      EXTRA_MICROS.forEach((m) => { a[m.id] += it[m.id] || 0; });
+      return a;
+    }, base);
   }
 
   // Referências diárias aproximadas para micronutrientes (adulto)
@@ -189,7 +207,7 @@
   }
 
   global.Domain = {
-    ACTIVITY, DEFAULT_RULES, ESSENTIAL_CATS, MICRO_REF,
+    ACTIVITY, DEFAULT_RULES, ESSENTIAL_CATS, MICRO_REF, EXTRA_MICROS,
     mifflin, nutritionTargets, baseTargets, effectiveTargets, workoutDone, dayIntake, nutritionSummary,
     categorize, financeSummary, netWorth, sourceBalances, isEssential, txInMonth,
     habitStreak, gymStreak,
