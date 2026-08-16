@@ -11,7 +11,7 @@
     App.boot({ active: "lifeos" });
     Store.ensure(NS, { days: {}, brainDump: "", pillars: [], habits: [], habitLog: {}, reviews: {}, journal: {} });
     seedIfEmpty();
-    dedupeSeeded();
+    dedupeHabitsPillars();
     App.onboard("lifeos", "Espiritual", [
       "🎯 <b>Top 3</b>: define até 3 prioridades absolutas por dia.",
       "📓 <b>Diário</b>: escreve como foi o teu dia e regista o teu humor.",
@@ -25,7 +25,10 @@
       [...tabs.children].forEach((c) => c.classList.toggle("active", c === b));
       render(b.dataset.tab);
     });
-    Store.subscribe(NS, () => render(current));
+    // dedupeHabitsPillars corre também aqui (não só no arranque) para apanhar duplicados
+    // que cheguem a meio da sessão via sync com outro dispositivo — usa {silent:true} por
+    // dentro, por isso não entra em loop com este próprio subscribe.
+    Store.subscribe(NS, () => { dedupeHabitsPillars(); render(current); });
     Store.subscribe("nut", () => { if (current === "hoje") render("hoje"); });
     Store.subscribe("fin", () => { if (current === "hoje") render("hoje"); });
     render("hoje");
@@ -48,29 +51,38 @@
     }
   }
 
-  // Nomes dos hábitos/pilares "seed" por defeito — os que arriscam duplicar-se se a app
-  // foi usada em dois dispositivos antes de ligares a sincronização entre eles.
-  const SEED_HABIT_NAMES = ["beber água", "ler", "ginásio"];
-  const SEED_PILLAR_NAMES = ["saúde", "finanças", "conhecimento", "trabalho"];
-
-  // Junta duplicados já existentes desses hábitos/pilares "seed" (mesmo nome), fundindo
-  // o histórico (streaks/objetivos) em vez de simplesmente apagar. Corre uma única vez.
-  function dedupeSeeded() {
+  // Deteta duplicados por NOME (não só os hábitos/pilares "seed" pré-definidos): se dois
+  // dispositivos criarem um hábito/pilar com o mesmo nome ANTES de terem sincronizado um
+  // com o outro, cada um gera um id diferente e o merge do sync.js (que funde por id) deixa
+  // os dois sobreviverem — aparecem como duplicados na app. Corre em TODOS os arranques
+  // (idempotente: não escreve nada se não houver duplicados) para também limpar duplicados
+  // que já tenham entrado no armazenamento local antes desta correção existir.
+  function hasDuplicateNames(list) {
+    const seen = new Set();
+    for (const x of (list || [])) {
+      const key = (x.name || "").trim().toLowerCase();
+      if (!key) continue;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+    return false;
+  }
+  function dedupeHabitsPillars() {
     const s = Store.get(NS);
-    if (s._dedupedV1) return;
+    if (!hasDuplicateNames(s.habits) && !hasDuplicateNames(s.pillars)) return;
     Store.update(NS, (st) => {
       const keptHabitByName = new Map();
       const habitsOut = [];
       (st.habits || []).forEach((h) => {
         const key = (h.name || "").trim().toLowerCase();
-        if (SEED_HABIT_NAMES.includes(key) && keptHabitByName.has(key)) {
+        if (key && keptHabitByName.has(key)) {
           const kept = keptHabitByName.get(key);
           const dupLog = (st.habitLog && st.habitLog[h.id]) || {};
           st.habitLog = st.habitLog || {}; st.habitLog[kept.id] = st.habitLog[kept.id] || {};
           Object.assign(st.habitLog[kept.id], dupLog);   // funde os dias marcados do duplicado
           delete st.habitLog[h.id];
         } else {
-          if (SEED_HABIT_NAMES.includes(key)) keptHabitByName.set(key, h);
+          if (key) keptHabitByName.set(key, h);
           habitsOut.push(h);
         }
       });
@@ -80,19 +92,17 @@
       const pillarsOut = [];
       (st.pillars || []).forEach((p) => {
         const key = (p.name || "").trim().toLowerCase();
-        if (SEED_PILLAR_NAMES.includes(key) && keptPillarByName.has(key)) {
+        if (key && keptPillarByName.has(key)) {
           const kept = keptPillarByName.get(key);
           kept.goals = kept.goals || [];
           const existingIds = new Set(kept.goals.map((g) => g.id));
           (p.goals || []).forEach((g) => { if (!existingIds.has(g.id)) kept.goals.push(g); });
         } else {
-          if (SEED_PILLAR_NAMES.includes(key)) keptPillarByName.set(key, p);
+          if (key) keptPillarByName.set(key, p);
           pillarsOut.push(p);
         }
       });
       st.pillars = pillarsOut;
-
-      st._dedupedV1 = true;
     }, { silent: true });
   }
 

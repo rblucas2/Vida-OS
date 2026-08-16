@@ -88,6 +88,36 @@
     out[key] = arr;
   }
 
+  // Hábitos e pilares do "los" também se fundem por NOME depois do merge por id: se os
+  // dois dispositivos criarem um hábito/pilar com o mesmo nome antes de terem sincronizado
+  // um com o outro, cada um tem um id diferente e o merge por id (acima) deixa os dois
+  // sobreviverem — parecem duplicados na app. Junta-os aqui (mesmo mecanismo do
+  // dedupeHabitsPillars em lifeos.js, que também limpa duplicados que já existam localmente).
+  function dedupeLosByName(out) {
+    out.habitLog = out.habitLog || {};
+    const byHabitName = new Map(); const habitsOut = [];
+    (out.habits || []).forEach((h) => {
+      const key = (h.name || "").trim().toLowerCase();
+      if (key && byHabitName.has(key)) {
+        const kept = byHabitName.get(key);
+        const dupLog = out.habitLog[h.id];
+        if (dupLog) { out.habitLog[kept.id] = out.habitLog[kept.id] || {}; Object.assign(out.habitLog[kept.id], dupLog); delete out.habitLog[h.id]; }
+      } else { if (key) byHabitName.set(key, h); habitsOut.push(h); }
+    });
+    out.habits = habitsOut;
+
+    const byPillarName = new Map(); const pillarsOut = [];
+    (out.pillars || []).forEach((p) => {
+      const key = (p.name || "").trim().toLowerCase();
+      if (key && byPillarName.has(key)) {
+        const kept = byPillarName.get(key); kept.goals = kept.goals || [];
+        const ids = new Set(kept.goals.map((g) => g.id));
+        (p.goals || []).forEach((g) => { if (!ids.has(g.id)) kept.goals.push(g); });
+      } else { if (key) byPillarName.set(key, p); pillarsOut.push(p); }
+    });
+    out.pillars = pillarsOut;
+  }
+
   /** Merge sem perdas: base = estado mais recente; acrescenta itens/chaves que só existem no outro
    *  (exceto itens marcados como apagados em "_tomb", para não os "ressuscitar"). */
   function mergeStates(ns, local, remote) {
@@ -102,6 +132,7 @@
       for (const k in old) if (!(k in obj)) obj[k] = old[k];
       out[key] = obj;
     });
+    if (ns === "los") dedupeLosByName(out);
     if (Object.keys(tomb).length) out._tomb = tomb;
     out._updatedAt = Math.max(local._updatedAt || 0, remote._updatedAt || 0);
     return out;
