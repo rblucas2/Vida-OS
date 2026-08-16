@@ -32,6 +32,27 @@
     Store.subscribe("nut", () => { if (current === "hoje") render("hoje"); });
     Store.subscribe("fin", () => { if (current === "hoje") render("hoje"); });
     render("hoje");
+    autoConnectGCal();
+  }
+
+  /** Liga ao Google Calendar sem precisar do botão "Ligar", se já estiver configurado
+   *  (Definições) e o utilizador já tiver autorizado esta app antes: pede um token de forma
+   *  silenciosa (connect(false), sem mostrar o ecrã de consentimento), que o Google concede
+   *  sozinho enquanto a sessão Google do browser e a autorização anterior forem válidas.
+   *  Tenta logo ao abrir a app — funciona nalguns contextos (PWA instalada, popups já
+   *  permitidos para este site) — e, se isso falhar (testado: o browser bloqueia o popup do
+   *  Google quando é pedido mesmo ao carregar a página, sem nenhum toque do utilizador ainda),
+   *  tenta de novo ao primeiro toque em qualquer sítio da app — o que conta como gesto do
+   *  utilizador para o browser sem exigir tocar especificamente no botão "Ligar". A app não
+   *  pode saltar a 1ª autorização em si (o Google exige sempre um consentimento interativo da
+   *  primeira vez), mas depois disso deixa de ser preciso repetir o clique em cada visita. */
+  function autoConnectGCal() {
+    if (typeof GCal === "undefined" || !GCal.enabled() || GCal.connected()) return;
+    const attempt = () => GCal.connect(false).then(() => { if (current === "hoje") render("hoje"); });
+    attempt().catch(() => {
+      const onFirstTouch = () => { attempt().catch(() => {}); };
+      document.addEventListener("pointerdown", onFirstTouch, { once: true });
+    });
   }
 
   function seedIfEmpty() {
