@@ -784,6 +784,16 @@
   }
 
   /* ----------------------------- SCANNER ----------------------------- */
+  // Histórico: já houve 4 correções anteriores neste scanner, todas em torno da configuração
+  // da biblioteca externa html5-qrcode (resolução, argumento de videoConstraints, caixa de
+  // deteção, botão de captura). Continuava a falhar — a causa ainda não coberta é a própria
+  // DEPENDÊNCIA de um script externo (unpkg.com), que numa ligação móvel lenta/instável ou
+  // atrás de um bloqueador de anúncios pode nunca chegar a carregar, deixando o "A carregar o
+  // scanner…" sem sair dali. Sempre que o browser suporta a API nativa BarcodeDetector (Chrome/
+  // Edge no Android, a maioria dos telemóveis Android) já não é preciso essa biblioteca nenhuma:
+  // usa-se getUserMedia + BarcodeDetector diretamente, sem depender de rede nenhuma para o
+  // scanner em si. A biblioteca externa html5-qrcode fica só como alternativa para browsers sem
+  // BarcodeDetector nativo (ex: Safari/iOS).
   function openScanner(onFood) {
     const status = el("div", { class: "tiny muted center", text: "A iniciar câmara…" });
     // altura mínima garantida (aspect-ratio como reforço) — sem isto, o vídeo interno
@@ -791,6 +801,12 @@
     const reader = el("div", { id: "qr-reader", style: "width:100%;min-height:260px;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:#000" });
     const captureBtn = el("button", { class: "btn btn-primary btn-block", html: "📸 Tirar foto e tentar ler", style: "margin-top:8px" });
     const manual = field("Ou insere o código manualmente", { placeholder: "ex: 5601234567890", inputmode: "numeric" });
+    let stream = null;   // MediaStream do caminho nativo (getUserMedia direto)
+    function stopAll() {
+      try { window.__qr && window.__qr.stop(); } catch (e) {}
+      window.__qr = null;
+      if (stream) { stream.getTracks().forEach((t) => { try { t.stop(); } catch (e) {} }); stream = null; }
+    }
     const s = sheet("Scanner de código de barras", [
       reader, status, captureBtn,
       el("button", { class: "btn btn-block", text: "Procurar código manual", onclick: () => {
@@ -799,9 +815,9 @@
         lookup(code);
       }}),
       manual,
-    ], { onClose: () => { try { window.__qr && window.__qr.stop(); } catch (e) {} } });
+    ], { onClose: () => stopAll() });
 
-    let lastDetect = 0;
+    let lastDetect = 0, stopped = false;
     async function lookup(code) {
       if (!code) return toast("Sem código.");
       status.textContent = `✓ Código lido: ${code} — a procurar produto…`;
@@ -817,18 +833,18 @@
           fibra: +(n["fiber_100g"] || 0), acucar: +(n["sugars_100g"] || 0), saturadas: +(n["saturated-fat_100g"] || 0), sodio };
         // guardar na base local
         Store.update(NS, (st) => { if (!st.foods.some((f) => f.id === food.id)) st.foods.unshift(food); });
-        try { window.__qr && window.__qr.stop(); } catch (e) {}
+        stopAll();
         s.close(); toast("✓ " + food.nome); onFood && onFood(food);
       } catch (e) { status.textContent = `Código ${code} lido, mas houve um erro de rede a procurar o produto (${e.message}). Tenta outra vez ou insere manualmente.`; }
     }
 
-    // carregar Html5Qrcode dinamicamente
-    if (window.Html5Qrcode) startCam();
+    if (window.BarcodeDetector) startCamNative();
+    else if (window.Html5Qrcode) startCamLib();
     else {
       status.textContent = "A carregar o scanner…";
       const sc = document.createElement("script");
       sc.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
-      sc.onload = startCam;
+      sc.onload = startCamLib;
       sc.onerror = () => { status.textContent = "Sem ligação para descarregar o scanner. Usa o código manual."; };
       document.head.appendChild(sc);
     }
@@ -851,7 +867,39 @@
     }
     captureBtn.addEventListener("click", captureAndRead);
 
-    function startCam() {
+    // Caminho nativo: getUserMedia + BarcodeDetector direto, sem nenhuma biblioteca externa
+    // (nem pedido de rede nenhum para o scanner) — mais rápido e imune a falhas de CDN.
+    async function startCamNative() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        const video = el("video", { autoplay: "", playsinline: "", muted: "", style: "width:100%;height:100%;object-fit:cover" });
+        video.srcObject = stream;
+        clear(reader); reader.appendChild(video);
+        await video.play().catch(() => {});
+        status.textContent = "Câmara aberta — aponta ao código de barras, a uns 10-15cm, bem iluminado. Se não ler sozinho, usa 'Tirar foto e tentar ler'.";
+        setTimeout(() => { if (!lastDetect && !stopped) status.textContent += " Ainda a tentar ler…"; }, 6000);
+        const det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"] });
+        const poll = async () => {
+          if (stopped) return;
+          try {
+            if (video.videoWidth) {
+              const found = await det.detect(video);
+              if (found.length) { lastDetect = Date.now(); stopped = true; const txt = found[0].rawValue; status.textContent = "✓ Detetado: " + txt; stopAll(); return lookup(txt); }
+            }
+          } catch (e) { /* frame ilegível — tenta o seguinte */ }
+          requestAnimationFrame(poll);
+        };
+        poll();
+      } catch (err) {
+        const msg = (err && err.message) || String(err);
+        if (/NotAllowedError|Permission denied/i.test(msg)) status.textContent = "Sem permissão para a câmara. Autoriza o acesso nas definições do browser e tenta outra vez.";
+        else if (/NotFoundError/i.test(msg)) status.textContent = "Não foi encontrada nenhuma câmara. Usa o código manual.";
+        else status.textContent = "Não foi possível abrir a câmara: " + msg;
+      }
+    }
+
+    // Alternativa via biblioteca externa (browsers sem BarcodeDetector nativo, ex: Safari/iOS).
+    function startCamLib() {
       try {
         // Chamada mais simples e básica possível — a biblioteca já suporta EAN/UPC por
         // defeito. Ler o frame INTEIRO (sem qrbox) em vez de recortar uma zona, para não
