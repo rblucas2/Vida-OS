@@ -54,13 +54,30 @@
     { id: "qui", label: "Quinta", g: 4 }, { id: "sex", label: "Sexta", g: 5 }, { id: "sab", label: "Sábado", g: 6 }, { id: "dom", label: "Domingo", g: 0 },
   ];
   const PLAN_SLOTS = [
-    { id: "pa", label: "Pequeno-almoço", icon: "🌅" }, { id: "al", label: "Almoço", icon: "🍽️" },
-    { id: "la", label: "Lanche", icon: "🍎" }, { id: "ja", label: "Jantar", icon: "🌙" },
+    { id: "pa", label: "Pequeno-almoço", icon: "🌅" }, { id: "lm", label: "Lanche manhã", icon: "🥐" },
+    { id: "al", label: "Almoço", icon: "🍽️" }, { id: "lt1", label: "Lanche da tarde 1", icon: "🍎" },
+    { id: "lt2", label: "Lanche da tarde 2", icon: "🥪" }, { id: "ja", label: "Jantar", icon: "🌙" },
   ];
   // Sugere a refeição mais provável consoante a hora do dia (usado como valor por defeito)
   function guessSlot() {
     const h = new Date().getHours();
-    if (h < 11) return "pa"; if (h < 15) return "al"; if (h < 19) return "la"; return "ja";
+    if (h < 10) return "pa"; if (h < 12) return "lm"; if (h < 15) return "al";
+    if (h < 17) return "lt1"; if (h < 19) return "lt2"; return "ja";
+  }
+  // Migração única: o antigo slot único "la" (Lanche) passa a "lt1" (Lanche da tarde 1) —
+  // corre uma vez no arranque para não perder o histórico de quem já tinha dados no formato antigo.
+  function migrateLancheSlot() {
+    const s = Store.get(NS);
+    if (s._slotsV2) return;
+    Store.update(NS, (st) => {
+      Object.values(st.mealPlan || {}).forEach((day) => {
+        if (day && day.la) { day.lt1 = (day.lt1 || []).concat(day.la); delete day.la; }
+      });
+      Object.values(st.diary || {}).forEach((items) => {
+        (items || []).forEach((it) => { if (it.slot === "la") it.slot = "lt1"; });
+      });
+      st._slotsV2 = true;
+    }, { silent: true });
   }
 
   // Acrescenta à base do utilizador os alimentos "seed" que ainda não tenha (por id),
@@ -78,6 +95,7 @@
     App.boot({ active: "nutrition" });
     Store.ensure(NS, { profile: null, customTargets: null, foods: SEED_FOODS, diary: {}, meals: [], workoutDays: {}, weightLog: {}, mealPlan: {} });
     seedNewFoods();
+    migrateLancheSlot();
     App.onboard("nutrition", "Nutrição", [
       "🧮 Define o teu perfil na <b>Calculadora</b> (Mifflin-St Jeor).",
       "📷 Regista comida com o <b>scanner de código de barras</b> (Open Food Facts).",
@@ -731,8 +749,86 @@
           toast(entries.length + " itens no diário de hoje ✓");
         })});
 
-    view.appendChild(el("div", { class: "stack" }, [sel, totCard, ...slots, syncNote,
+    view.appendChild(el("div", { class: "stack" }, [weekGridCard(nut), sel, totCard, ...slots, syncNote,
       el("p", { class: "tiny muted center", text: isToday ? "Adiciona ou remove aqui e o Diário de hoje atualiza-se sozinho." : "O plano é um modelo semanal reutilizável. Copia um dia para o diário quando o quiseres registar." })]));
+  }
+
+  // Visão em calendário da semana inteira (segunda a domingo) — 6 linhas (refeições) x 7
+  // colunas (dias), para veres o plano todo de relance. Toca num dia para o abrires e editares
+  // em baixo (a edição em si continua na vista de dia, mais fácil de usar no telemóvel do que
+  // tocar em células pequenas de uma tabela).
+  function weekGridCard(nut) {
+    const plan = nut.mealPlan || {};
+    const head = el("tr", {}, [el("th", { style: "padding:4px" }), ...PLAN_DAYS.map((d) => el("th", {
+      style: "padding:4px 6px;font-size:.68rem;font-weight:700;" + (d.id === planDay ? "color:var(--accent)" : "color:var(--text-soft)"), text: d.label.slice(0, 3),
+    }))]);
+    const rows = PLAN_SLOTS.map((sl) => {
+      const cells = PLAN_DAYS.map((d) => {
+        const entries = (plan[d.id] && plan[d.id][sl.id]) || [];
+        return el("td", {
+          style: "padding:5px 6px;border-left:1px solid var(--border);vertical-align:top;cursor:pointer;min-width:74px" + (d.id === planDay ? ";background:var(--accent-soft)" : ""),
+          onclick: () => { planDay = d.id; render("plano"); },
+        }, entries.length ? entries.slice(0, 3).map((e) => el("div", { class: "tiny", style: "line-height:1.35", text: e.nome })) : [el("span", { class: "tiny muted", text: "—" })]);
+      });
+      return el("tr", {}, [el("td", { class: "tiny", style: "padding:5px 4px;white-space:nowrap;font-weight:600", html: sl.icon + " " + sl.label }), ...cells]);
+    });
+    const table = el("table", { style: "border-collapse:collapse;width:100%" }, [el("thead", {}, [head]), el("tbody", {}, rows)]);
+    return el("div", { class: "card" }, [
+      el("div", { class: "row between" }, [
+        el("strong", { text: "Semana completa" }),
+        el("button", { class: "btn btn-soft btn-sm", html: "📄 Exportar PDF", onclick: () => printWeekPlan(nut) }),
+      ]),
+      el("div", { style: "overflow-x:auto;margin-top:8px" }, [table]),
+    ]);
+  }
+
+  function escHtml(s) { return String(s == null ? "" : s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])); }
+
+  /** Gera um PDF do plano da semana inteira usando o diálogo de impressão do browser
+   *  ("Guardar como PDF" é uma opção nativa em qualquer impressora aí) — sem precisar de
+   *  nenhuma biblioteca externa nem pedido de rede. */
+  function printWeekPlan(nut) {
+    const plan = nut.mealPlan || {};
+    const old = document.getElementById("print-plan-area");
+    if (old) old.remove();
+    const rowsHtml = PLAN_SLOTS.map((sl) => {
+      const cells = PLAN_DAYS.map((d) => {
+        const entries = (plan[d.id] && plan[d.id][sl.id]) || [];
+        const cellHtml = entries.length
+          ? entries.map((e) => escHtml(e.nome) + (e.kcal ? ` <span style="color:#888">(${num(e.kcal)} kcal)</span>` : "")).join("<br>")
+          : "—";
+        return `<td style="border:1px solid #ccc;padding:6px;vertical-align:top;font-size:11px">${cellHtml}</td>`;
+      }).join("");
+      return `<tr><td style="border:1px solid #ccc;padding:6px;font-weight:700;background:#f3f3f3;white-space:nowrap;font-size:11px">${sl.icon} ${escHtml(sl.label)}</td>${cells}</tr>`;
+    }).join("");
+    const headHtml = PLAN_DAYS.map((d) => `<th style="border:1px solid #ccc;padding:6px;background:#f3f3f3;font-size:11px">${escHtml(d.label)}</th>`).join("");
+    const area = document.createElement("div");
+    area.id = "print-plan-area";
+    area.innerHTML = `
+      <h1 style="font-family:sans-serif;font-size:18px;margin:0 0 2px">Plano de alimentação semanal</h1>
+      <p style="font-family:sans-serif;font-size:11px;color:#666;margin:0 0 12px">Gerado em ${new Date().toLocaleDateString("pt-PT")}</p>
+      <table style="border-collapse:collapse;width:100%;font-family:sans-serif">
+        <thead><tr><th style="border:1px solid #ccc;padding:6px"></th>${headHtml}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>`;
+    document.body.appendChild(area);
+    ensurePrintPlanStyle();
+    window.print();
+    setTimeout(() => area.remove(), 500);
+  }
+  function ensurePrintPlanStyle() {
+    if (document.getElementById("print-plan-style")) return;
+    const st = document.createElement("style");
+    st.id = "print-plan-style";
+    st.textContent = `
+      #print-plan-area { display: none; }
+      @media print {
+        body > *:not(#print-plan-area) { display: none !important; }
+        #print-plan-area { display: block !important; }
+        @page { size: landscape; margin: 12mm; }
+      }
+    `;
+    document.head.appendChild(st);
   }
 
   function addPlanEntry(dayId, slotId) {
