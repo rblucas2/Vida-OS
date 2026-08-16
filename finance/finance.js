@@ -40,12 +40,19 @@
   function monthNav(onChange) {
     const prev = el("button", { class: "btn btn-ghost btn-sm", text: "‹", onclick: () => shift(-1) });
     const next = el("button", { class: "btn btn-ghost btn-sm", text: "›", onclick: () => shift(1) });
-    const label = el("strong", { text: prettyMonth(viewMonth), style: "min-width:140px;text-align:center" });
+    // input nativo type="month" escondido — o label funciona como botão que abre o seletor,
+    // para se poder saltar direto para um mês antigo em vez de clicar em ‹ repetidamente.
+    const picker = el("input", { type: "month", class: "hide", value: viewMonth });
+    picker.addEventListener("change", () => { if (picker.value) { viewMonth = picker.value; onChange(); } });
+    const label = el("strong", {
+      text: "📅 " + prettyMonth(viewMonth), style: "min-width:150px;text-align:center;cursor:pointer",
+      onclick: () => { if (picker.showPicker) picker.showPicker(); else picker.click(); },
+    });
     function shift(d) {
       const [y, m] = viewMonth.split("-").map(Number);
       const dt = new Date(y, m - 1 + d, 1); viewMonth = monthKey(dt); onChange();
     }
-    return el("div", { class: "row", style: "justify-content:center;gap:6px;margin-bottom:6px" }, [prev, label, next]);
+    return el("div", { class: "row", style: "justify-content:center;gap:6px;margin-bottom:6px" }, [prev, label, next, picker]);
   }
 
   /* ----------------------------- RESUMO ----------------------------- */
