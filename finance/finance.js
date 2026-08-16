@@ -14,7 +14,7 @@
     seedFinance();
     applyRecurring();
     App.onboard("finance", "Finanças", [
-      "⇪ Importa o <b>CSV do banco</b> — categorias automáticas que aprendem com as tuas correções.",
+      "⇪ Importa o <b>extrato do banco</b> (CSV, Excel ou PDF) — categorias automáticas que aprendem com as tuas correções.",
       "↻ Define <b>movimentos recorrentes</b> (renda, ordenado, subscrições).",
       "🎯 <b>Orçamentos</b> com alertas e <b>Dinheiro Livre</b> do mês.",
       "📊 <b>Net Worth</b> com evolução ao longo do tempo.",
@@ -202,12 +202,19 @@
     }
     search.input.addEventListener("input", draw); draw();
 
-    const importInput = el("input", { type: "file", accept: ".csv,text/csv", class: "hide" });
-    importInput.addEventListener("change", () => { const f = importInput.files[0]; if (f) f.text().then((txt) => importCsv(txt)); importInput.value = ""; });
+    const importInput = el("input", { type: "file", accept: ".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,application/pdf", class: "hide" });
+    importInput.addEventListener("change", () => {
+      const f = importInput.files[0]; importInput.value = "";
+      if (!f) return;
+      const name = f.name.toLowerCase();
+      if (name.endsWith(".pdf")) importPdf(f);
+      else if (name.endsWith(".xlsx") || name.endsWith(".xls")) importExcel(f);
+      else f.text().then((txt) => importCsv(txt));
+    });
 
     view.appendChild(el("div", { class: "stack" }, [
       el("div", { class: "row", style: "gap:10px" }, [
-        el("button", { class: "btn btn-soft btn-block", html: "⇪ Importar CSV", onclick: () => importInput.click() }),
+        el("button", { class: "btn btn-soft btn-block", html: "⇪ Importar CSV/Excel/PDF", onclick: () => importInput.click() }),
         el("button", { class: "btn btn-primary btn-block", text: "+ Manual", onclick: () => editTx(null) }),
       ]),
       el("div", { class: "row", style: "gap:10px" }, [
@@ -511,6 +518,68 @@
   function importCsv(text) {
     const rows = parseCSV(text);
     if (rows.length < 2) return toast("CSV vazio ou ilegível.");
+    importRows(rows);
+  }
+
+  /** Extrai as linhas (array-de-arrays) da 1ª folha de um .xlsx/.xls. */
+  function importExcel(file) {
+    if (typeof XLSX === "undefined") return toast("Biblioteca de Excel não carregou — verifica a ligação à internet e tenta de novo.");
+    file.arrayBuffer().then((buf) => {
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }).map((r) => r.map((c) => String(c ?? "")));
+      const clean = rows.filter((r) => r.some((c) => c.trim() !== ""));
+      if (clean.length < 2) return toast("Ficheiro Excel vazio ou ilegível.");
+      importRows(clean);
+    }).catch(() => toast("Não consegui ler o ficheiro Excel."));
+  }
+
+  /** Extrai texto de um PDF (extrato bancário) e tenta reconhecer linhas de movimento
+      (data + descrição + valor). Heurística "melhor esforço": funciona bem em extratos
+      com texto selecionável e uma linha por movimento; não funciona em PDFs digitalizados
+      (imagem) nem em layouts muito tabulares onde a linha de texto perde a ordem das colunas. */
+  function importPdf(file) {
+    if (typeof pdfjsLib === "undefined") return toast("Biblioteca de PDF não carregou — verifica a ligação à internet e tenta de novo.");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    file.arrayBuffer().then(async (buf) => {
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      const lines = [];
+      for (let p = 1; p <= doc.numPages; p++) {
+        const page = await doc.getPage(p);
+        const content = await page.getTextContent();
+        const byY = new Map();
+        content.items.forEach((it) => {
+          const y = Math.round(it.transform[5]);
+          if (!byY.has(y)) byY.set(y, []);
+          byY.get(y).push(it);
+        });
+        [...byY.entries()].sort((a, b) => b[0] - a[0]).forEach(([, items]) => {
+          lines.push(items.sort((a, b) => a.transform[4] - b.transform[4]).map((i) => i.str).join(" ").replace(/\s+/g, " ").trim());
+        });
+      }
+      const rows = [["Data", "Descrição", "Valor"]];
+      lines.forEach((line) => { const r = parsePdfLine(line); if (r) rows.push(r); });
+      if (rows.length < 2) return toast("Não encontrei movimentos reconhecíveis neste PDF (extratos digitalizados/imagem não são suportados).");
+      importRows(rows);
+    }).catch(() => toast("Não consegui ler o ficheiro PDF."));
+  }
+
+  function parsePdfLine(line) {
+    const dm = line.match(/\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/);
+    if (!dm) return null;
+    const date = parseDate(dm[0]);
+    if (!date) return null;
+    const rest = line.slice(dm.index + dm[0].length);
+    const amtMatches = [...rest.matchAll(/-?\d{1,3}(?:[.\s]\d{3})*,\d{2}|-?\d+\.\d{2}/g)];
+    if (!amtMatches.length) return null;
+    const last = amtMatches[amtMatches.length - 1];
+    if (isNaN(parseNum(last[0]))) return null;
+    const desc = rest.slice(0, last.index).replace(/[€\s]+$/, "").trim();
+    return [date, desc, last[0]];
+  }
+
+  function importRows(rows) {
+    if (rows.length < 2) return toast("Sem linhas para importar.");
     // tenta encontrar a linha de cabeçalho (a que tem palavras conhecidas)
     let headerIdx = rows.findIndex((r) => r.join(" ").toLowerCase().match(/data|date|descri|montante|valor|amount|d[eé]bito|cr[eé]dito/));
     if (headerIdx < 0) headerIdx = 0;
@@ -560,10 +629,11 @@
       out.slice(0, 8).forEach((t) => preview.appendChild(txRow(t, false)));
       sh._out = out;
     }
-    [mDate, mDesc, mAmount, mDebit, mCredit].forEach((f) => f.input.addEventListener("change", drawPreview));
-    drawPreview();
 
-    const sh = sheet("Importar CSV do banco", [
+    // "sh" tem de existir ANTES da 1ª chamada a drawPreview() (que lhe atribui "_out") —
+    // sheet() é criado primeiro; o botão "Importar transações" só lê "sh" mais tarde,
+    // dentro do próprio onclick, quando já está tudo inicializado.
+    const sh = sheet("Importar extrato do banco", [
       el("p", { class: "tiny muted", text: "Confirma o mapeamento das colunas. As categorias são atribuídas automaticamente." }),
       mDate, mDesc, mAmount,
       el("details", {}, [el("summary", { class: "tiny muted", style: "cursor:pointer", text: "Banco usa colunas Débito/Crédito separadas?" }), mDebit, mCredit]),
@@ -579,6 +649,9 @@
         sh.close(); toast(`${fresh.length} importadas` + (out.length - fresh.length ? ` · ${out.length - fresh.length} duplicadas ignoradas` : ""));
       }}),
     ]);
+
+    [mDate, mDesc, mAmount, mDebit, mCredit].forEach((f) => f.input.addEventListener("change", drawPreview));
+    drawPreview();
   }
 
   /* ----------------------------- ORÇAMENTOS ----------------------------- */
