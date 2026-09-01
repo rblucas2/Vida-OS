@@ -501,10 +501,17 @@
     if (s == null) return NaN;
     s = String(s).replace(/\s|€|EUR/gi, "").trim();
     if (!s) return NaN;
+    // sinais negativos comuns em extratos bancários: "-150,00", "150,00-", "(150,00)"
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    if (s.endsWith("-")) { neg = true; s = s.slice(0, -1); }
+    if (s.startsWith("-")) { neg = true; s = s.slice(1); }
     // formato PT: 1.234,56 -> remove '.', troca ',' por '.'
     if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
     else s = s.replace(/,/g, "");
-    return parseFloat(s);
+    const n = parseFloat(s);
+    if (isNaN(n)) return NaN;
+    return neg ? -n : n;
   }
   function parseDate(s) {
     s = String(s).trim();
