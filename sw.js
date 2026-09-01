@@ -1,5 +1,5 @@
 /* Service worker — app shell offline para a suite Vida OS */
-const VERSION = "vidaos-v34";
+const VERSION = "vidaos-v35";
 const CORE = [
   "./", "./index.html", "./dashboard.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-180.png",
@@ -8,6 +8,7 @@ const CORE = [
   "./lifeos/", "./lifeos/index.html", "./lifeos/lifeos.js",
   "./finance/", "./finance/index.html", "./finance/finance.js",
   "./nutrition/", "./nutrition/index.html", "./nutrition/nutrition.js",
+  "./tese/", "./tese/index.html", "./tese/tese.js",
   "./gymos/", "./gymos/index.html",
 ];
 

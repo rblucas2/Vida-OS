@@ -26,8 +26,8 @@
     if (!location.protocol.startsWith("http")) return; // file:// não suporta SW
     // sw.js está na raiz do projeto (um nível acima das sub-apps)
     const p = location.pathname;
-    const base = /\/(lifeos|finance|nutrition)\//.test(p)
-      ? p.replace(/(lifeos|finance|nutrition)\/[^/]*$/, "")
+    const base = /\/(lifeos|finance|nutrition|tese)\//.test(p)
+      ? p.replace(/(lifeos|finance|nutrition|tese)\/[^/]*$/, "")
       : p.replace(/[^/]*$/, "");
     navigator.serviceWorker.register(base + "sw.js").catch((e) => console.warn("SW falhou", e));
   }
@@ -49,14 +49,16 @@
     money: '<rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/>',
     food: '<path d="M6 2v7a3 3 0 0 0 6 0V2M9 2v20M16 2c-1.5 1-2 3-2 6s.5 4 2 5v9"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    thesis: '<path d="M12 3l10 5-10 5-10-5 10-5z"/><path d="M6 10.5v5c0 1.5 2.7 2.7 6 2.7s6-1.2 6-2.7v-5"/><path d="M22 8v6"/>',
   };
   function tabbar(active) {
-    const base = /\/(lifeos|finance|nutrition)\//.test(location.pathname) ? "../" : "./";
+    const base = /\/(lifeos|finance|nutrition|tese)\//.test(location.pathname) ? "../" : "./";
     const items = [
       { id: "home", href: base, label: "Início", icon: ICON.grid },
       { id: "lifeos", href: base + "lifeos/", label: "Espiritual", icon: ICON.tasks },
       { id: "finance", href: base + "finance/", label: "Finanças", icon: ICON.money },
       { id: "nutrition", href: base + "nutrition/", label: "Nutrição", icon: ICON.food },
+      { id: "tese", href: base + "tese/", label: "Tese", icon: ICON.thesis },
     ];
     const nav = el("nav", { class: "tabbar" });
     items.forEach((it) => {

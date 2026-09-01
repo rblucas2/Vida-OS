@@ -10,7 +10,7 @@
     App.boot({ active: "home" });     // tema + service worker + sync + barra inferior consistente
     $("#settingsBtn").addEventListener("click", App.openSettings);
     // re-render quando qualquer app muda (sync/edições)
-    Store.subscribe("los", render); Store.subscribe("fin", render); Store.subscribe("nut", render);
+    Store.subscribe("los", render); Store.subscribe("fin", render); Store.subscribe("nut", render); Store.subscribe("tese", render);
     tick(); setInterval(tick, 1000);
     render();
   }
@@ -34,13 +34,14 @@
 
   function render() {
     const dash = clear($("#dash"));
-    const los = Store.get("los"), fin = Store.get("fin"), nut = Store.get("nut");
+    const los = Store.get("los"), fin = Store.get("fin"), nut = Store.get("nut"), tese = Store.get("tese");
     dash.appendChild(pOperator(los));
     dash.appendChild(pSession(los));
     dash.appendChild(pGoals(los));
     dash.appendChild(pFinance(fin));
     dash.appendChild(pHabits(los));
     dash.appendChild(pNutrition(nut, los));
+    dash.appendChild(pThesis(tese));
     dash.appendChild(pTasks(los));
     dash.appendChild(pCalendar(los));
   }
@@ -147,7 +148,27 @@
   }
   function mm(k, v, c) { return el("div", { class: "mm" }, [el("div", { class: "v", style: "color:" + c, text: v }), el("div", { class: "k", text: k })]); }
 
-  /* 06 — Tarefas de hoje */
+  /* 06 — Tese (marcos + contagem decrescente) */
+  function pThesis(tese) {
+    tese = tese || {};
+    const milestones = tese.milestones || [];
+    if (!tese.targetDate && !milestones.length) {
+      return panel("c4", "06", "Tese", "", [
+        el("a", { class: "applink2", href: "./tese/" }, [el("div", { class: "emptymini", text: "Define o plano da tese." })]),
+      ]);
+    }
+    const d = new Date((tese.targetDate || "") + "T00:00:00"), today = new Date(todayISO() + "T00:00:00");
+    const dLeft = tese.targetDate ? Math.round((d - today) / 86400000) : null;
+    const doneM = milestones.filter((m) => m.done).length, totalM = milestones.length;
+    return panel("c4", "06", "Tese", totalM ? doneM + "/" + totalM + " marcos" : "", [
+      el("a", { class: "applink2", href: "./tese/" }, [
+        el("div", { class: "hbig num", text: dLeft == null ? "—" : dLeft >= 0 ? dLeft + "d" : "atrasada" }),
+        el("div", { class: "tiny muted", text: tese.targetDate ? "até à apresentação" : "Define a data de apresentação." }),
+      ]),
+    ]);
+  }
+
+  /* 07 — Tarefas de hoje */
   function pTasks(los) {
     const day = (los.days && los.days[todayISO()]) || { tasks: [] };
     const tasks = day.tasks || [];
@@ -158,11 +179,11 @@
       el("div", { class: "cbx" + (t.done ? " on" : ""), html: t.done ? "✓" : "", onclick: () => toggleTask(t.id) }),
       el("div", { class: "tx", text: (t.top ? "★ " : "") + t.text }),
     ])));
-    return panel("c5", "06", "Tarefas de hoje", done + "/" + tasks.length, [list]);
+    return panel("c5", "07", "Tarefas de hoje", done + "/" + tasks.length, [list]);
   }
   function toggleTask(id) { Store.update("los", (s) => { const d = s.days[todayISO()]; if (!d) return; const t = d.tasks.find((x) => x.id === id); if (t) t.done = !t.done; }); }
 
-  /* 07 — Calendário (semana + plano do dia) */
+  /* 08 — Calendário (semana + plano do dia) */
   function pCalendar(los) {
     const now = new Date(); const dow = (now.getDay() + 6) % 7; const monday = new Date(now); monday.setDate(now.getDate() - dow);
     const strip = el("div", { class: "weekstrip" });
@@ -178,16 +199,16 @@
     const box = el("div", { class: "schedule", style: "margin-top:14px" }); let any = false;
     BLOCKS.forEach((b) => { (day.tasks || []).filter((t) => t.block === b.id).forEach((t) => { any = true; box.appendChild(el("div", { class: "s-item" }, [el("div", { class: "tm", text: b.label }), el("div", { style: "flex:1;" + (t.done ? "color:var(--text-mute);text-decoration:line-through" : ""), text: t.text })])); }); });
     if (!any) box.appendChild(el("div", { class: "emptymini", text: "Nada agendado hoje. Planeia o dia em Espiritual." }));
-    return panel("c7", "07", "Calendário", now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" }).toUpperCase(), [strip, box]);
+    return panel("c7", "08", "Calendário", now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" }).toUpperCase(), [strip, box]);
   }
 
-  /* 08 — Objetivos semana / mês */
+  /* 09 — Objetivos semana / mês */
   function pGoals(los) {
     const fw = el("input", { placeholder: "Objetivo da semana…", value: los.weeklyGoal || "" });
     const fm = el("input", { placeholder: "Objetivo do mês…", value: los.monthlyGoal || "" });
     fw.addEventListener("change", () => Store.update("los", (s) => { s.weeklyGoal = fw.value.trim(); }, { silent: true }));
     fm.addEventListener("change", () => Store.update("los", (s) => { s.monthlyGoal = fm.value.trim(); }, { silent: true }));
-    return panel("c3", "08", "Objetivos", "", [
+    return panel("c3", "09", "Objetivos", "", [
       el("div", { class: "lbl", style: "margin-bottom:4px", text: "Esta semana" }), el("div", { class: "goalrow" }, [fw]),
       el("div", { class: "lbl", style: "margin:12px 0 4px", text: "Este mês" }), el("div", { class: "goalrow" }, [fm]),
     ]);

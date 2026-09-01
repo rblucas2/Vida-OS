@@ -1,0 +1,13 @@
+{
+  "name": "Tese",
+  "short_name": "Tese",
+  "description": "Plano de ação da tese de mestrado: marcos de longo prazo e passos do dia-a-dia.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f6f6f4",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    { "src": "../icons/tese.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
