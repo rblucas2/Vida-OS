@@ -32,7 +32,7 @@
     return Object.assign({ "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, authFor(cfg.key));
   }
 
-  const apps = ["los", "fin", "nut"];
+  const apps = ["los", "fin", "nut", "tese"];
 
   function push(ns, data) {
     if (!cfg || !apps.includes(ns)) return;
@@ -63,7 +63,7 @@
 
   // Quais os campos que são listas identificadas por "id", listas identificadas por "name",
   // e objetos-por-chave (data/dia) — usados para fazer merge sem perdas entre dispositivos.
-  const ID_ARRAYS = { fin: ["transactions", "assets", "recurring", "sources"], nut: ["foods", "meals"], los: ["habits", "pillars"] };
+  const ID_ARRAYS = { fin: ["transactions", "assets", "recurring", "sources"], nut: ["foods", "meals"], los: ["habits", "pillars"], tese: ["milestones", "tasks"] };
   const NAME_ARRAYS = { fin: ["categories"] };
   const KEYED_OBJ = { fin: ["budgets", "categoryRules", "nwHistory"], nut: ["diary", "workoutDays", "weightLog", "mealPlan"], los: ["days", "habitLog", "reviews", "journal"] };
 
