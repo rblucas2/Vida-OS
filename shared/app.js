@@ -148,6 +148,32 @@
     ]);
     setTimeout(refreshGc, 0);
 
+    // Links úteis — atalhos que o utilizador guarda (Supabase, Google Cloud Console, etc.),
+    // para não ter de andar à procura sempre que precisa de voltar a uma dessas páginas.
+    const linksList = el("div", { class: "list", style: "margin-top:6px" });
+    function drawLinks() {
+      const links = Store.get("sys").links || [];
+      linksList.innerHTML = "";
+      if (!links.length) { linksList.appendChild(el("div", { class: "empty tiny", text: "Sem links guardados ainda." })); return; }
+      links.forEach((l) => {
+        linksList.appendChild(el("div", { class: "item" }, [
+          el("a", { class: "grow t link", href: l.url, target: "_blank", rel: "noopener", text: l.name || l.url }),
+          el("button", { class: "btn btn-ghost btn-icon", text: "✕", title: "Remover", onclick: () => {
+            Store.update("sys", (s) => { s.links = (s.links || []).filter((x) => x.id !== l.id); }); drawLinks();
+          }}),
+        ]));
+      });
+    }
+    const fLinkName = UI.field("Nome", { placeholder: "ex: Supabase, Google Cloud Console…" });
+    const fLinkUrl = UI.field("URL", { placeholder: "https://…" });
+    const addLinkBtn = el("button", { class: "btn btn-block", text: "+ Adicionar link", onclick: () => {
+      const name = fLinkName.input.value.trim(), url = fLinkUrl.input.value.trim();
+      if (!url) return toast("Indica o URL.");
+      Store.update("sys", (s) => { s.links = s.links || []; s.links.push({ id: UI.uid(), name: name || url, url }); });
+      fLinkName.input.value = ""; fLinkUrl.input.value = ""; drawLinks(); toast("Link guardado ✓");
+    }});
+    drawLinks();
+
     const exportBtn = el("button", { class: "btn btn-block", text: "Exportar cópia de segurança (.json)", onclick: () => {
       const blob = new Blob([JSON.stringify(Store.exportAll(), null, 2)], { type: "application/json" });
       const a = el("a", { href: URL.createObjectURL(blob), download: `vidaos-backup-${UI.todayISO()}.json` }); a.click();
@@ -163,6 +189,9 @@
     UI.sheet("Definições", [
       el("div", { class: "section-title", style: "margin-top:4px", text: "Aparência" }), themeSel,
       el("button", { class: "btn btn-soft btn-block", text: "Instalar app no dispositivo", onclick: promptInstall }),
+      el("div", { class: "section-title", text: "Links úteis" }),
+      el("p", { class: "tiny muted", style: "margin:0 0 4px", text: "Guarda aqui atalhos para sítios a que voltas muitas vezes ao configurar o Vida OS — Supabase, Google Cloud Console, etc." }),
+      linksList, fLinkName, fLinkUrl, addLinkBtn,
       el("div", { class: "section-title", text: "Integração · Google Calendar" }), gcalField,
       el("div", { class: "section-title", text: "Sincronização telemóvel ↔ PC" }),
       el("div", { class: "row" }, [el("span", { class: "muted tiny", text: "Estado:" }), syncState]),
@@ -189,6 +218,17 @@
   const App = {
     boot({ active } = {}) {
       Store.ensure("sys", { theme: "auto" });
+      // semeia 2 links úteis na 1ª vez (as próprias páginas que as Definições já pedem para
+      // abrir ao configurar Supabase/Google Calendar) — só uma vez, para não voltar depois de apagados.
+      Store.update("sys", (s) => {
+        if (s._linksSeeded) return;
+        s._linksSeeded = true;
+        s.links = s.links || [];
+        if (!s.links.length) {
+          s.links.push({ id: UI.uid(), name: "Supabase", url: "https://supabase.com/dashboard" });
+          s.links.push({ id: UI.uid(), name: "Google Cloud Console", url: "https://console.cloud.google.com/" });
+        }
+      }, { silent: true });
       applyTheme();
       registerSW();
       Sync.init();
