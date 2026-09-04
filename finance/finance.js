@@ -191,14 +191,49 @@
     $("#subtitle").textContent = fin.transactions.length + " transações";
     const search = field("Pesquisar", { placeholder: "Descrição ou categoria…" });
     const list = el("div", { class: "card list" });
+    const selBar = el("div", { class: "row", style: "gap:10px;align-items:center" });
+
+    let selectMode = false;
+    let selected = new Set();
+    let shown = []; // ids atualmente visíveis (após pesquisa) — para o "selecionar tudo"
+
+    function drawBar() {
+      clear(selBar);
+      if (!selectMode) {
+        selBar.appendChild(el("button", { class: "btn btn-ghost btn-block btn-sm", html: "☑ Selecionar", onclick: () => { selectMode = true; selected = new Set(); draw(); } }));
+        return;
+      }
+      const allSelected = shown.length > 0 && shown.every((id) => selected.has(id));
+      selBar.appendChild(el("button", { class: "btn btn-ghost btn-sm", text: allSelected ? "Limpar" : "Todos", onclick: () => { selected = allSelected ? new Set() : new Set(shown); draw(); } }));
+      selBar.appendChild(el("div", { class: "grow s", style: "text-align:center;color:var(--text-soft)", text: selected.size ? selected.size + " selecionada" + (selected.size > 1 ? "s" : "") : "Toca nas transações para selecionar" }));
+      selBar.appendChild(el("button", { class: "btn btn-block", style: "flex:0 0 auto;color:" + (selected.size ? "var(--bad)" : "var(--text-mute)"), text: "🗑 Apagar", disabled: !selected.size, onclick: async () => {
+        if (!selected.size) return;
+        const n = selected.size;
+        if (!(await UI.confirm(`Apagar ${n} transaç${n > 1 ? "ões" : "ão"}? Podes anular a seguir.`, { ok: "Apagar", danger: true }))) return;
+        const ids = selected;
+        const snap = Store.get(NS).transactions.filter((t) => ids.has(t.id)).map((t) => JSON.parse(JSON.stringify(t)));
+        // Store.update dispara Store.subscribe(NS, ...) -> render(current), que já reconstrói
+        // esta vista do zero (selectMode volta a false) — não é preciso repor o estado aqui.
+        Store.update(NS, (s) => { s.transactions = s.transactions.filter((t) => !ids.has(t.id)); });
+        undo(`${n} transaç${n > 1 ? "ões apagadas" : "ão apagada"}`, () => Store.update(NS, (s) => { s.transactions.push(...snap); }));
+      }}));
+      selBar.appendChild(el("button", { class: "btn btn-ghost btn-sm", text: "Cancelar", onclick: () => { selectMode = false; selected = new Set(); draw(); } }));
+    }
+
     function draw() {
       const q = search.input.value.toLowerCase().trim();
       clear(list);
       const tx = [...Store.get(NS).transactions]
         .filter((t) => !q || (t.desc || "").toLowerCase().includes(q) || (t.category || "").toLowerCase().includes(q))
         .sort((a, b) => (b.date || "").localeCompare(a.date) || (b._c || 0) - (a._c || 0));
+      shown = tx.slice(0, 400).map((t) => t.id);
+      drawBar();
       if (!tx.length) { list.appendChild(el("div", { class: "empty", text: "Sem transações. Importa um CSV ou adiciona manualmente." })); return; }
-      tx.slice(0, 400).forEach((t) => list.appendChild(txRow(t, true)));
+      tx.slice(0, 400).forEach((t) => list.appendChild(txRow(t, true, {
+        selectMode,
+        checked: selected.has(t.id),
+        onToggle: () => { if (selected.has(t.id)) selected.delete(t.id); else selected.add(t.id); drawBar(); const row = document.getElementById("tx-" + t.id); if (row) row.classList.toggle("on", selected.has(t.id)); },
+      })));
     }
     search.input.addEventListener("input", draw); draw();
 
@@ -222,16 +257,19 @@
         el("button", { class: "btn btn-ghost btn-block btn-sm", html: "🏷️ Categorias", onclick: manageCategories }),
         el("button", { class: "btn btn-ghost btn-block btn-sm", html: "💳 Fontes", onclick: manageSources }),
       ]),
-      importInput, search, list,
+      importInput, search, selBar, list,
     ]));
   }
 
-  function txRow(t, editable) {
+  function txRow(t, editable, sel) {
     const sign = t.type === "income" ? "+" : t.type === "transfer" ? "↔" : "−";
     const color = t.type === "income" ? "var(--good)" : t.type === "transfer" ? "var(--text-mute)" : "var(--text)";
     const src = t.account ? " · " + t.account : "";
-    const row = el("div", { class: "item" }, [
-      el("div", { class: "grow", style: editable ? "cursor:pointer" : "", onclick: editable ? () => editTx(t) : null }, [
+    const inSelectMode = !!(sel && sel.selectMode);
+    const chk = inSelectMode ? el("input", { type: "checkbox", checked: sel.checked, style: "width:20px;height:20px;flex-shrink:0", onclick: (e) => { e.stopPropagation(); sel.onToggle(); } }) : null;
+    const row = el("div", { class: "item" + (inSelectMode && sel.checked ? " on" : ""), id: "tx-" + t.id, onclick: inSelectMode ? () => sel.onToggle() : null, style: inSelectMode ? "cursor:pointer" : "" }, [
+      chk,
+      el("div", { class: "grow", style: !inSelectMode && editable ? "cursor:pointer" : "", onclick: !inSelectMode && editable ? (e) => { e.stopPropagation(); editTx(t); } : null }, [
         el("div", { class: "t", text: t.desc || "(sem descrição)" }),
         el("div", { class: "s", html: `<span class="pill" style="padding:1px 8px">${t.category || "Outros"}</span> &nbsp;${UI.prettyDate(t.date)}${src}` }),
       ]),
