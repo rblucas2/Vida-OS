@@ -137,7 +137,10 @@
   }
 
   // --- Donut categórico (lista de {label,value,color}) -----------------
-  function donut(parts, { size = 150, stroke = 22 } = {}) {
+  // onSelect(part, index): opcional — se dado, cada fatia fica tocável (destaca-se a si
+  // própria, esbate as outras) e chama onSelect ao ser tocada. Quem chama trata do resto
+  // (ex.: mostrar o detalhe da fatia, ligar a legenda) — o donut só sabe desenhar e avisar.
+  function donut(parts, { size = 150, stroke = 22, onSelect } = {}) {
     const ns = "http://www.w3.org/2000/svg";
     const r = (size - stroke) / 2, c = 2 * Math.PI * r, cx = size / 2;
     const total = parts.reduce((a, b) => a + b.value, 0) || 1;
@@ -147,7 +150,7 @@
     const base = document.createElementNS(ns, "circle");
     base.setAttribute("cx", cx); base.setAttribute("cy", cx); base.setAttribute("r", r); base.setAttribute("fill", "none"); base.setAttribute("stroke", "var(--surface-2)"); base.setAttribute("stroke-width", stroke);
     svg.appendChild(base);
-    parts.forEach((p) => {
+    parts.forEach((p, i) => {
       if (p.value <= 0) return;
       const frac = p.value / total;
       const ci = document.createElementNS(ns, "circle");
@@ -156,10 +159,68 @@
       ci.setAttribute("stroke-dasharray", `${c * frac} ${c * (1 - frac)}`);
       ci.setAttribute("stroke-dashoffset", -c * acc);
       ci.setAttribute("transform", `rotate(-90 ${cx} ${cx})`);
+      ci.dataset.idx = i;
+      ci.style.transition = "opacity .15s";
+      if (onSelect) {
+        ci.setAttribute("pointer-events", "stroke");
+        ci.style.cursor = "pointer";
+        ci.addEventListener("click", () => onSelect(p, i));
+      }
       svg.appendChild(ci);
       acc += frac;
     });
     return svg;
+  }
+
+  /** Donut + legenda + total central, com interatividade: tocar numa fatia (ou na
+   *  linha da legenda correspondente) mostra o nome/valor/percentagem dessa fatia no
+   *  centro do anel e esbate as restantes; tocar de novo volta ao total. Usado nos
+   *  gráficos de categorias das Finanças. */
+  function donutCard({ title, parts, totalValue, totalLabel, legendLimit = 7, empty } = {}) {
+    const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+    if (!parts.length) return el("div", { class: "card" }, [title ? el("strong", { text: title }) : null, el("div", { class: "empty tiny", html: empty || "—" })].filter(Boolean));
+
+    const centerEl = el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px;text-align:center;gap:1px" });
+    const fitText = (text) => el("div", { class: "num", style: "font-weight:800;font-size:1.05rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text });
+    function showTotal() {
+      centerEl.innerHTML = "";
+      centerEl.appendChild(fitText(totalValue));
+      centerEl.appendChild(el("div", { class: "tiny muted", style: "font-size:.62rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: totalLabel || "" }));
+    }
+    function showPart(p) {
+      centerEl.innerHTML = "";
+      centerEl.appendChild(el("div", { class: "tiny", style: "font-weight:750;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: p.label }));
+      centerEl.appendChild(fitText(eur0(p.value)));
+      centerEl.appendChild(el("div", { class: "tiny muted", style: "font-size:.62rem", text: Math.round(p.value / total * 100) + "%" }));
+    }
+    let selectedIdx = null;
+    const legendRows = [];
+    function paintSelection() {
+      [...svg.querySelectorAll("circle[data-idx]")].forEach((c) => { c.style.opacity = (selectedIdx === null || Number(c.dataset.idx) === selectedIdx) ? "1" : ".3"; });
+      legendRows.forEach((row, i) => row.classList.toggle("sel", selectedIdx === i));
+    }
+    function select(i) {
+      selectedIdx = selectedIdx === i ? null : i;
+      if (selectedIdx === null) showTotal(); else showPart(parts[selectedIdx]);
+      paintSelection();
+    }
+    const svg = donut(parts, { size: 132, onSelect: (p, i) => select(i) });
+    showTotal();
+    const legend = el("div", { class: "legend", style: "flex:1" }, parts.slice(0, legendLimit).map((p, i) => {
+      const row = el("div", { class: "lg", dataset: { idx: i }, onclick: () => select(i) }, [
+        el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
+        el("span", { class: "vl tiny", text: eur0(p.value) + " · " + Math.round(p.value / total * 100) + "%" }),
+      ]);
+      legendRows.push(row);
+      return row;
+    }));
+    return el("div", { class: "card" }, [
+      title ? el("strong", { text: title }) : null,
+      el("div", { class: "row", style: "gap:18px;margin-top:14px;align-items:center" }, [
+        el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [svg, centerEl]),
+        legend,
+      ]),
+    ].filter(Boolean));
   }
 
   // --- Mini gráfico de barras / linha (histórico) ----------------------
@@ -199,8 +260,9 @@
     return wrap;
   }
 
-  // Paleta determinística por nome de categoria
-  const PALETTE = ["#3b6ef5","#2e9e5b","#d99a2b","#d9534f","#8e5bd9","#16a3a3","#e06ba3","#5b7cd9","#7a9e2e","#c1672e"];
+  // Paleta categórica determinística por nome (série 1-8, ver --series-N em base.css).
+  // Mesma categoria = sempre a mesma cor, mesmo que a ordem das categorias mude.
+  const PALETTE = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)","var(--series-5)","var(--series-6)","var(--series-7)","var(--series-8)"];
   function colorFor(str) {
     let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
     return PALETTE[h % PALETTE.length];
@@ -242,5 +304,5 @@
   }
 
   global.UI = { el, $, $$, clear, eur, eur0, num, todayISO, isoDate, monthKey, prettyDate, prettyMonth, MONTHS, DAYS, pad,
-    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, sparkBars, lineChart, colorFor, svgIcon, uid, dateNav, guardClick };
+    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, donutCard, sparkBars, lineChart, colorFor, svgIcon, uid, dateNav, guardClick };
 })(window);

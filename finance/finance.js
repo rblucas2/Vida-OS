@@ -2,7 +2,7 @@
    Finanças Pessoais
    ===================================================================== */
 (function () {
-  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, colorFor, uid, todayISO, monthKey, prettyMonth, guardClick } = UI;
+  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, donutCard, colorFor, uid, todayISO, monthKey, prettyMonth, guardClick } = UI;
   const D = Domain;
   const NS = "fin";
 
@@ -121,26 +121,15 @@
       ]);
     }
 
-    // Donut por categoria
+    // Donut por categoria — toca numa fatia ou na legenda para ver o valor e a
+    // percentagem exatos dessa categoria em vez do total.
     const cats = Object.entries(s.byCat).sort((a, b) => b[1] - a[1]);
-    let chartCard;
-    if (cats.length) {
-      const parts = cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) }));
-      const legend = el("div", { class: "legend", style: "flex:1" }, parts.slice(0, 7).map((p) => el("div", { class: "lg" }, [
-        el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
-        el("span", { class: "vl tiny", text: eur0(p.value) + " · " + Math.round(p.value / s.expense * 100) + "%" }),
-      ])));
-      chartCard = el("div", { class: "card" }, [
-        el("strong", { text: "Despesas por categoria" }),
-        el("div", { class: "row", style: "gap:18px;margin-top:14px;align-items:center" }, [
-          el("div", { class: "ringwrap", style: "flex:none;position:relative" }, [
-            donut(parts, { size: 132 }),
-            el("div", { style: "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center" }, [
-              el("div", { class: "num", style: "font-weight:800;font-size:1.05rem", text: eur0(s.expense) }), el("div", { class: "tiny muted", style: "font-size:.62rem", text: "gasto" })]),
-          ]), legend,
-        ]),
-      ]);
-    } else chartCard = el("div", { class: "card" }, [el("strong", { text: "Despesas por categoria" }), el("div", { class: "empty tiny", html: '<span class="ico">🥧</span>Sem despesas neste mês. Adiciona movimentos, importa um CSV, ou muda de mês com ‹ ›.' })]);
+    const chartCard = donutCard({
+      title: "Despesas por categoria",
+      parts: cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) })),
+      totalValue: eur0(s.expense), totalLabel: "gasto",
+      empty: '<span class="ico">🥧</span>Sem despesas neste mês. Adiciona movimentos, importa um CSV, ou muda de mês com ‹ ›.',
+    });
 
     // Top despesas
     const tx = D.txInMonth(fin.transactions, viewMonth).filter((t) => t.type === "expense").sort((a, b) => b.amount - a.amount).slice(0, 5);
@@ -841,21 +830,13 @@
     const byCat = {};
     (fin.transactions || []).forEach((t) => { if (t.type === "expense" && (t.date || "").slice(0, 4) === curYear) byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
     const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-    let catCard;
-    if (cats.length) {
-      const totalExp = cats.reduce((a, c) => a + c[1], 0) || 1;
-      const parts = cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) }));
-      const legend = el("div", { class: "legend", style: "flex:1" }, parts.slice(0, 7).map((p) => el("div", { class: "lg" }, [
-        el("span", { class: "nm" }, [el("span", { class: "sw", style: "background:" + p.color }), el("span", { class: "tiny", text: p.label })]),
-        el("span", { class: "vl tiny", text: eur0(p.value) + " · " + Math.round(p.value / totalExp * 100) + "%" }),
-      ])));
-      catCard = el("div", { class: "card" }, [
-        el("div", { class: "row between" }, [el("strong", { text: "Onde gastas mais" }), el("span", { class: "tiny muted", text: curYear })]),
-        el("div", { class: "row", style: "gap:18px;margin-top:14px;align-items:center" }, [
-          el("div", { class: "ringwrap", style: "flex:none" }, [donut(parts, { size: 132 })]), legend,
-        ]),
-      ]);
-    } else catCard = el("div", { class: "card empty", html: '<span class="ico">🥧</span>Sem despesas este ano ainda.' });
+    const totalExp = cats.reduce((a, c) => a + c[1], 0) || 1;
+    const catCard = donutCard({
+      title: "Onde gastas mais · " + curYear,
+      parts: cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) })),
+      totalValue: eur0(totalExp), totalLabel: "gasto em " + curYear,
+      empty: '<span class="ico">🥧</span>Sem despesas este ano ainda.',
+    });
 
     view.appendChild(el("div", { class: "stack" }, [hero, chart, catCard, yearsCard].filter(Boolean)));
   }

@@ -45,6 +45,18 @@
   --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   --font-num: "Inter", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  /* Paleta categórica dos gráficos (donuts, legendas) — 8 cores validadas para
+     distinção real ao olhar e para daltonismo (ver ferramenta de validação da
+     skill "dataviz"); ordem fixa, nunca trocada por categoria/filtro. */
+  --series-1: #2a78d6; /* azul */
+  --series-2: #eb6834; /* laranja */
+  --series-3: #1baf7a; /* verde-água */
+  --series-4: #eda100; /* amarelo */
+  --series-5: #e87ba4; /* magenta */
+  --series-6: #008300; /* verde */
+  --series-7: #4a3aa7; /* violeta */
+  --series-8: #e34948; /* vermelho */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -70,6 +82,16 @@
     --sh-1: 0 1px 2px rgba(0,0,0,.4);
     --sh-2: 0 2px 8px rgba(0,0,0,.35), 0 16px 40px rgba(0,0,0,.45);
     --sh-pop: 0 14px 50px rgba(0,0,0,.6);
+
+    /* mesmas 8 cores, um passo mais claro para contraste >= 3:1 no fundo escuro */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
   }
 }
 
@@ -348,11 +370,14 @@ input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--a
 .weekstrip .d.sel .pt { background:#fff; }
 
 /* ---- Legenda de gráficos ---- */
-.legend { display:flex; flex-direction:column; gap:7px; }
-.legend .lg { display:flex; align-items:center; justify-content:space-between; font-size:.82rem; }
-.legend .lg .nm { display:flex; align-items:center; gap:8px; min-width:0; }
+.legend { display:flex; flex-direction:column; gap:7px; min-width:0; }
+.legend .lg { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:.82rem; border-radius:8px; padding:3px 4px; margin:-3px -4px; transition:background .15s; }
+.legend .lg[data-idx] { cursor:pointer; }
+.legend .lg.sel { background:var(--surface-2); }
+.legend .lg .nm { display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 auto; overflow:hidden; }
+.legend .lg .nm .tiny { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .legend .lg .sw { width:10px; height:10px; border-radius:3px; flex:none; }
-.legend .lg .vl { font-variant-numeric: tabular-nums; color: var(--text-soft); font-weight:600; }
+.legend .lg .vl { font-variant-numeric: tabular-nums; color: var(--text-soft); font-weight:600; white-space:nowrap; flex:none; }
 
 /* ---- Macro chips (estilo MyFitnessPal) ---- */
 .macros3 { display:grid; grid-template-columns: repeat(3,1fr); gap:10px; }
