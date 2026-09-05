@@ -286,16 +286,20 @@
     const fAmount = field("Valor (€)", { type: "number", value: t.amount, inputmode: "decimal", step: "0.01" });
     const fDate = field("Data", { type: "date", value: t.date });
     const fDesc = field("Descrição", { value: t.desc, placeholder: "ex: Almoço, Ordenado…" });
-    const fCat = field("Categoria", { value: t.category, list: "catlist" });
-    const dl = el("datalist", { id: "catlist" }, catNames().map((c) => el("option", { value: c })));
+    const fCat = categoryField(t.category, t.type);
     const fAcc = sourceField(t.account);
-    fDesc.input.addEventListener("blur", () => { if (!fCat.input.value || fCat.input.value === "Outros") fCat.input.value = D.categorize(fDesc.input.value, fin.categoryRules); });
+    fDesc.input.addEventListener("blur", () => {
+      if (fCat.input.value && fCat.input.value !== "Outros") return;
+      const guess = D.categorize(fDesc.input.value, fin.categoryRules);
+      if (![...fCat.input.options].some((o) => o.value === guess)) fCat.input.insertBefore(el("option", { value: guess }, guess), fCat.input.lastElementChild);
+      fCat.input.value = guess;
+    });
 
     const catRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fCat]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir categorias", onclick: () => manageCategories() })]);
     const srcRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fAcc]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir fontes", onclick: () => manageSources() })]);
 
     const body = [
-      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, dl, srcRow,
+      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, srcRow,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(t)); Store.update(NS, (s) => { s.transactions = s.transactions.filter((x) => x.id !== t.id); }); sh.close(); undo("Transação apagada", () => Store.update(NS, (s) => { s.transactions.push(snap); })); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
@@ -364,6 +368,36 @@
       Store.update(NS, (s) => { s.sources = s.sources || []; if (!s.sources.some((x) => x.name === name)) s.sources.push({ id: uid(), name, opening: parseFloat(fb.input.value) || 0 }); });
       saved = true;
       sh2.close(); toast("Fonte criada ✓"); onDone(name);
+    })})], { onClose: () => { if (!saved && onCancel) onCancel(); } });
+  }
+  /** Campo "Categoria" — select com as categorias existentes + opção para criar uma nova.
+      Substitui o antigo input+datalist (era preciso escrever o nome à mão, sujeito a erros/duplicados). */
+  function categoryField(value, txType) {
+    const names = catNames();
+    const opts = names.map((n) => ({ value: n, label: n }));
+    if (value && !names.includes(value)) opts.unshift({ value, label: value });
+    opts.push({ value: "__new__", label: "+ Nova categoria…" });
+    const f = field("Categoria", { type: "select", value: value || "Outros", options: opts });
+    f.input.addEventListener("change", () => {
+      if (f.input.value !== "__new__") return;
+      const prev = value || "Outros";
+      quickAddCategory(txType === "income" ? "income" : "lifestyle", (name) => {
+        const opt = el("option", { value: name }, name);
+        f.input.insertBefore(opt, f.input.lastElementChild);
+        f.input.value = name;
+      }, () => { f.input.value = prev; });
+    });
+    return f;
+  }
+  function quickAddCategory(defaultGroup, onDone, onCancel) {
+    let saved = false;
+    const fn = field("Nome da nova categoria", { placeholder: "ex: Viagens" });
+    const fg = field("Grupo", { type: "select", value: defaultGroup, options: [{ value: "essential", label: "Essencial" }, { value: "lifestyle", label: "Estilo de vida" }, { value: "income", label: "Receita" }] });
+    const sh2 = sheet("Nova categoria", [fn, fg, el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
+      const name = fn.input.value.trim(); if (!name) return toast("Indica o nome.");
+      Store.update(NS, (s) => { s.categories = s.categories || []; if (!s.categories.some((x) => x.name === name)) s.categories.push({ name, group: fg.input.value }); });
+      saved = true;
+      sh2.close(); toast("Categoria criada ✓"); onDone(name);
     })})], { onClose: () => { if (!saved && onCancel) onCancel(); } });
   }
   function essentialSet() { const c = Store.get(NS).categories || []; const s = c.filter((x) => x.group === "essential").map((x) => x.name); return s.length ? s : Domain.ESSENTIAL_CATS; }
