@@ -116,11 +116,15 @@
     let chartCard = null;
     const bd = burndownData(th);
     if (bd) {
+      const paceRow = paceReadout(bd);
       chartCard = el("div", { class: "card" }, [
         el("div", { class: "row between" }, [el("strong", { text: "Progresso" }), el("span", { class: "tiny muted", text: bd.ideal ? "real vs. ideal" : "itens restantes" })]),
+        paceRow,
         burndownSVGWrap(bd),
-      ]);
+      ].filter(Boolean));
     }
+
+    const gcalRow = el("button", { class: "btn btn-ghost btn-block btn-sm", html: "📅 Importar do Google Calendar", onclick: importFromGCal });
 
     const upcoming = items.filter((i) => i.status !== "done").sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")).slice(0, 5);
     const upcomingCard = el("div", { class: "card" }, [el("strong", { text: "Próximos" })]);
@@ -133,7 +137,70 @@
       el("button", { class: "btn btn-soft btn-block btn-sm", text: "+ Passo", onclick: () => editTask(null) }),
     ]));
 
-    view.appendChild(el("div", { class: "stack" }, [hero, fDate, statsRow, chartCard, upcomingCard].filter(Boolean)));
+    view.appendChild(el("div", { class: "stack" }, [hero, fDate, statsRow, chartCard, gcalRow, upcomingCard].filter(Boolean)));
+  }
+  // Leitura em português simples do gráfico de progresso — "estás no ritmo certo / atrasado /
+  // adiantado", em vez de só mostrar duas linhas e deixar o utilizador a tentar interpretá-las.
+  function paceReadout(bd) {
+    if (!bd.ideal) return null;
+    const i = bd.series.length - 1;
+    const actual = bd.series[i], ideal = bd.ideal[i];
+    const diff = Math.round(actual - ideal);
+    let text, color;
+    if (diff <= 0) { text = diff === 0 ? "✅ Exatamente no ritmo planeado." : `✅ Adiantado(a): ${Math.abs(diff)} passo(s) a menos do que o planeado para hoje.`; color = "var(--good)"; }
+    else { text = `⚠️ Atrasado(a): faltam mais ${diff} passo(s) do que o planeado para hoje.`; color = "var(--bad)"; }
+    return el("div", { class: "tiny", style: "font-weight:650;color:" + color + ";margin-bottom:2px", text });
+  }
+  /* ----------------------------- IMPORTAR DO GOOGLE CALENDAR ----------------------------- */
+  function importFromGCal() {
+    if (typeof GCal === "undefined" || !GCal.enabled()) { toast("Liga o Google Calendar primeiro em Definições → Integração."); return; }
+    const th = Store.get(NS);
+    const todayIso = todayISO();
+    const fMin = field("Desde", { type: "date", value: addDays(todayIso, -30) });
+    const fMax = field("Até", { type: "date", value: th.targetDate || addDays(todayIso, 180) });
+    const resultsEl = el("div", { class: "list", style: "margin-top:10px" });
+    let events = [];
+    const alreadyImported = new Set(th.tasks.map((t) => t.gcalId).filter(Boolean));
+
+    async function search() {
+      clear(resultsEl); resultsEl.appendChild(el("div", { class: "empty tiny", text: "A procurar…" }));
+      try {
+        const raw = await GCal.listEvents(new Date(fMin.input.value + "T00:00:00").toISOString(), new Date(fMax.input.value + "T23:59:59").toISOString());
+        events = raw.filter((ev) => !alreadyImported.has(ev.id)).map((ev) => ({
+          id: ev.id, summary: ev.summary || "(sem título)",
+          date: (ev.start && (ev.start.date || (ev.start.dateTime || "").slice(0, 10))) || "",
+          description: (ev.description || "").trim(), checked: true,
+        }));
+        clear(resultsEl);
+        if (!events.length) { resultsEl.appendChild(el("div", { class: "empty tiny", text: "Sem eventos novos neste intervalo (ou já foram todos importados antes)." })); return; }
+        events.forEach((ev) => resultsEl.appendChild(el("label", { class: "item", style: "cursor:pointer" }, [
+          el("input", { type: "checkbox", checked: true, onchange: (e) => { ev.checked = e.target.checked; } }),
+          el("div", { class: "grow", style: "margin-left:10px" }, [
+            el("div", { class: "t", text: ev.summary }),
+            el("div", { class: "s tiny muted", text: [ev.date ? UI.prettyDate(ev.date) : "sem data", ev.description].filter(Boolean).join(" · ") }),
+          ]),
+        ])));
+      } catch (e) {
+        clear(resultsEl);
+        resultsEl.appendChild(el("div", { class: "empty tiny", style: "color:var(--bad)", text: "Erro a ligar ao Google Calendar: " + e.message }));
+      }
+    }
+
+    const sh = sheet("Importar do Google Calendar", [
+      el("p", { class: "tiny muted", text: "Procura eventos no teu Google Calendar e escolhe quais são da tese — cada um vira um passo aqui, com a data e a descrição do evento como nota." }),
+      el("div", { class: "input-row" }, [fMin, fMax]),
+      el("button", { class: "btn btn-soft btn-block", text: "🔍 Procurar eventos", onclick: guardClick(search) }),
+      resultsEl,
+      el("button", { class: "btn btn-primary btn-block", style: "margin-top:10px", text: "Importar selecionados", onclick: guardClick(() => {
+        const toImport = events.filter((e) => e.checked);
+        if (!toImport.length) return toast("Nada selecionado.");
+        Store.update(NS, (s) => {
+          toImport.forEach((ev) => s.tasks.push({ id: uid(), text: ev.summary, due: ev.date || "", status: "todo", note: ev.description || "", done: false, doneAt: null, createdAt: Date.now(), gcalId: ev.id }));
+        });
+        toast(toImport.length + " passo(s) importado(s) ✓");
+        sh.close();
+      }) }),
+    ]);
   }
   function statCard(v, l) {
     return el("div", { class: "card kpi pad-sm", style: "flex:1;text-align:center;align-items:center" }, [
@@ -146,7 +213,7 @@
       el("button", { class: "btn btn-icon btn-ghost", style: "width:24px;height:24px;border:2px solid " + (isDone ? "var(--good)" : "var(--border)") + ";background:" + (isDone ? "var(--good)" : "transparent") + ";color:#fff;font-size:.7rem;flex:none", html: isDone ? "✓" : "", onclick: () => toggleItemDone(it.kind, it.id) }),
       el("div", { class: "grow", style: "cursor:pointer;" + (isDone ? "text-decoration:line-through;color:var(--text-mute)" : ""), onclick: () => it.kind === "milestone" ? editMilestone(rawMilestone(it.id)) : editTask(rawTask(it.id)) }, [
         el("div", { class: "t", text: (it.kind === "milestone" ? "🎓 " : "") + it.text }),
-        it.due ? el("div", { class: "s tiny muted", text: UI.prettyDate(it.due) }) : null,
+        it.due || it.note ? el("div", { class: "s tiny muted", text: [it.due ? UI.prettyDate(it.due) : null, it.note || null].filter(Boolean).join(" · ") }) : null,
       ]),
       it.status !== "done" ? el("span", { class: "pill tiny", style: "color:" + statusColor(it.status) + ";border-color:" + statusColor(it.status), text: statusLabel(it.status) }) : null,
     ]);
@@ -220,17 +287,24 @@
     return wrap;
   }
 
-  /* ----------------------------- LINHA DO TEMPO ----------------------------- */
+  /* ----------------------------- SEMANA ----------------------------- */
+  // Substituiu a antiga "Linha do tempo" (pontos espalhados horizontalmente, difícil de ler e
+  // de tirar informação). Agrupa marcos/passos por semana (seg-dom) — a pergunta que interessa
+  // responder é "o que tenho de fazer esta semana e nas próximas", não "onde cai cada ponto".
+  function mondayOf(iso) {
+    const d = new Date(iso + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return UI.isoDate(d);
+  }
+  function addDays(iso, n) { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return UI.isoDate(d); }
   function renderTimeline(view) {
     const th = Store.get(NS);
-    $("#subtitle").textContent = "Linha do tempo";
+    $("#subtitle").textContent = "O que fazer, semana a semana";
     const items = combinedItems(th);
-    const dated = items.filter((i) => i.due).sort((a, b) => a.due.localeCompare(b.due));
+    const dated = items.filter((i) => i.due);
     const undated = items.filter((i) => !i.due);
 
-    if (!dated.length) {
+    if (!items.length) {
       view.appendChild(el("div", { class: "stack" }, [
-        el("div", { class: "card empty", text: "Sem marcos/passos com data ainda. Adiciona datas para veres a linha do tempo." }),
+        el("div", { class: "card empty", text: "Sem marcos/passos ainda. Adiciona marcos e passos com datas para veres o plano semana a semana." }),
         el("div", { class: "row", style: "gap:8px" }, [
           el("button", { class: "btn btn-soft btn-block btn-sm", text: "+ Marco", onclick: () => editMilestone(null) }),
           el("button", { class: "btn btn-soft btn-block btn-sm", text: "+ Passo", onclick: () => editTask(null) }),
@@ -240,58 +314,49 @@
     }
 
     const todayIso = todayISO();
-    const minDate = dated[0].due < todayIso ? dated[0].due : todayIso;
-    const lastDated = dated[dated.length - 1].due;
-    const maxDate = th.targetDate && th.targetDate > lastDated ? th.targetDate : lastDated;
-    const minTs = new Date(minDate + "T00:00:00").getTime();
-    const maxTs = Math.max(new Date(maxDate + "T00:00:00").getTime(), minTs + 86400000);
-    const span = maxTs - minTs;
-    const pct = (iso) => Math.min(100, Math.max(0, (new Date(iso + "T00:00:00").getTime() - minTs) / span * 100));
+    const curWeek = mondayOf(todayIso);
+    let minWeek = curWeek, maxWeek = curWeek;
+    dated.forEach((it) => { const w = mondayOf(it.due); if (w < minWeek) minWeek = w; if (w > maxWeek) maxWeek = w; });
+    if (th.targetDate) { const w = mondayOf(th.targetDate); if (w > maxWeek) maxWeek = w; }
 
-    const milestoneItems = dated.filter((i) => i.kind === "milestone");
-    const taskItems = dated.filter((i) => i.kind === "task");
-    const trackW = Math.max(560, dated.length * 100);
+    const byWeek = {};
+    dated.forEach((it) => { const w = mondayOf(it.due); (byWeek[w] = byWeek[w] || []).push(it); });
 
-    function lane(labelText, arr, big) {
-      const laneEl = el("div", { style: `position:relative;height:${big ? 74 : 50}px;margin-bottom:4px` }, [
-        el("div", { style: "position:absolute;left:0;right:0;top:50%;height:2px;background:var(--border)" }),
+    const weeks = [];
+    for (let w = minWeek, guard = 0; w <= maxWeek && guard < 60; w = addDays(w, 7), guard++) weeks.push(w);
+
+    const cards = weeks.map((w) => {
+      const isCur = w === curWeek;
+      const isPast = w < curWeek;
+      const wEnd = addDays(w, 6);
+      const wItems = (byWeek[w] || []).sort((a, b) => a.due.localeCompare(b.due));
+      const doneN = wItems.filter((i) => i.status === "done").length;
+      const list = el("div", { class: "list", style: "margin-top:6px" });
+      if (!wItems.length) list.appendChild(el("div", { class: "empty tiny", text: isPast ? "Nada agendado — ok se já passou." : "Nada agendado ainda nesta semana." }));
+      wItems.forEach((it) => list.appendChild(itemRow(it)));
+      return el("div", { class: "card" + (isCur ? " week-cur" : ""), style: isCur ? "border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)" : (isPast ? "opacity:.6" : "") }, [
+        el("div", { class: "row between" }, [
+          el("strong", { text: (isCur ? "🔵 Esta semana · " : "") + UI.prettyDate(w) + " – " + UI.prettyDate(wEnd) }),
+          wItems.length ? el("span", { class: "tiny muted num", text: doneN + "/" + wItems.length }) : null,
+        ]),
+        list,
+        el("button", { class: "btn btn-ghost btn-block btn-sm", style: "margin-top:6px", text: "+ Passo nesta semana", onclick: () => editTask(null, { due: isCur ? todayIso : w }) }),
       ]);
-      arr.forEach((it) => {
-        const left = pct(it.due);
-        laneEl.appendChild(el("div", {
-          style: `position:absolute;left:${left}%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;cursor:pointer`,
-          onclick: () => it.kind === "milestone" ? editMilestone(rawMilestone(it.id)) : editTask(rawTask(it.id)),
-        }, [
-          el("div", { style: `width:${big ? 14 : 10}px;height:${big ? 14 : 10}px;border-radius:50%;background:${statusColor(it.status)};border:2px solid var(--surface)` }),
-          el("div", { class: "tiny", style: `margin-top:4px;white-space:nowrap;max-width:88px;overflow:hidden;text-overflow:ellipsis;font-weight:${big ? 700 : 500}` , text: it.text }),
-        ]));
-      });
-      return el("div", {}, [el("div", { class: "tiny muted", style: "margin-bottom:2px", text: labelText }), laneEl]);
-    }
-
-    const todayLeft = pct(todayIso);
-    const inner = el("div", { style: `position:relative;min-width:${trackW}px;padding-top:14px` }, [
-      el("div", { style: `position:absolute;left:${todayLeft}%;top:14px;bottom:0;width:2px;background:var(--accent);z-index:1` }),
-      el("div", { style: `position:absolute;left:${todayLeft}%;top:0;transform:translateX(-50%);font-size:.62rem;font-weight:700;color:var(--accent)`, text: "hoje" }),
-      milestoneItems.length ? lane("Marcos", milestoneItems, true) : null,
-      taskItems.length ? lane("Passos", taskItems, false) : null,
-    ].filter(Boolean));
-    const scrollWrap = el("div", { style: "overflow-x:auto;padding:4px 2px 6px" }, [inner]);
-
-    const card = el("div", { class: "card" }, [el("strong", { text: "Marcos e passos no tempo" }), scrollWrap]);
+    });
 
     let undatedCard = null;
     if (undated.length) {
       undatedCard = el("div", { class: "card" }, [
-        el("strong", { text: "Sem data definida" }),
-        el("div", { class: "row wrap", style: "gap:8px;margin-top:8px" }, undated.map((it) => el("span", {
+        el("strong", { text: "Sem data definida ainda" }),
+        el("p", { class: "tiny muted", style: "margin:4px 0 8px", text: "Dá-lhes uma data para entrarem no plano semanal." }),
+        el("div", { class: "row wrap", style: "gap:8px" }, undated.map((it) => el("span", {
           class: "pill", style: "cursor:pointer", text: (it.kind === "milestone" ? "🎓 " : "") + it.text,
           onclick: () => it.kind === "milestone" ? editMilestone(rawMilestone(it.id)) : editTask(rawTask(it.id)),
         }))),
       ]);
     }
 
-    view.appendChild(el("div", { class: "stack" }, [card, undatedCard].filter(Boolean)));
+    view.appendChild(el("div", { class: "stack" }, [undatedCard, ...cards].filter(Boolean)));
   }
 
   /* ----------------------------- CALENDÁRIO ----------------------------- */
@@ -397,20 +462,21 @@
   /* ----------------------------- FORMULÁRIOS (marcos e passos) ----------------------------- */
   function editMilestone(existing, presets) {
     const isNew = !existing;
-    const m = existing || { id: uid(), text: "", due: (presets && presets.due) || "", status: (presets && presets.status) || "todo" };
+    const m = existing || { id: uid(), text: "", due: (presets && presets.due) || "", status: (presets && presets.status) || "todo", note: "" };
     const f = field("Marco", { value: m.text, placeholder: "ex: Revisão de literatura, Metodologia, Escrita, Defesa…" });
     const fd = field("Data alvo (opcional)", { type: "date", value: m.due || "" });
     const fs = field("Estado", { type: "select", value: m.status, options: STATUSES.map((s) => ({ value: s.id, label: s.label })) });
+    const fn = field("Como (notas, opcional)", { type: "textarea", value: m.note || "", placeholder: "ex: entrevistar 5 participantes, analisar com SPSS…" });
     const sh = sheet(isNew ? "Novo marco" : "Editar marco", [
-      f, fd, fs,
+      f, fd, fs, fn,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.milestones = s.milestones.filter((x) => x.id !== m.id); }); sh.close(); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
           const text = f.input.value.trim(); if (!text) return toast("Indica o marco.");
-          const status = fs.input.value;
+          const status = fs.input.value; const note = fn.input.value.trim();
           Store.update(NS, (s) => {
-            if (isNew) { s.milestones.push({ id: m.id, text, due: fd.input.value || "", status, done: status === "done", doneAt: status === "done" ? Date.now() : null }); }
-            else { const it = s.milestones.find((x) => x.id === m.id); it.text = text; it.due = fd.input.value || ""; if (it.status !== status) { it.status = status; it.done = status === "done"; it.doneAt = status === "done" ? Date.now() : null; } }
+            if (isNew) { s.milestones.push({ id: m.id, text, due: fd.input.value || "", status, note, done: status === "done", doneAt: status === "done" ? Date.now() : null }); }
+            else { const it = s.milestones.find((x) => x.id === m.id); it.text = text; it.due = fd.input.value || ""; it.note = note; if (it.status !== status) { it.status = status; it.done = status === "done"; it.doneAt = status === "done" ? Date.now() : null; } }
           });
           sh.close();
         })}),
@@ -420,20 +486,21 @@
   }
   function editTask(existing, presets) {
     const isNew = !existing;
-    const t = existing || { id: uid(), text: "", due: (presets && presets.due) || "", status: (presets && presets.status) || "todo" };
+    const t = existing || { id: uid(), text: "", due: (presets && presets.due) || "", status: (presets && presets.status) || "todo", note: "" };
     const f = field("Passo", { value: t.text, placeholder: "ex: Escrever secção 2.1, Ler 3 artigos…" });
     const fd = field("Data (opcional)", { type: "date", value: t.due || "" });
     const fs = field("Estado", { type: "select", value: t.status, options: STATUSES.map((s) => ({ value: s.id, label: s.label })) });
+    const fn = field("Como (notas, opcional)", { type: "textarea", value: t.note || "", placeholder: "ex: usar o artigo do Smith (2023) como referência…" });
     const sh = sheet(isNew ? "Novo passo" : "Editar passo", [
-      f, fd, fs,
+      f, fd, fs, fn,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.tasks = s.tasks.filter((x) => x.id !== t.id); }); sh.close(); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
           const text = f.input.value.trim(); if (!text) return toast("Indica o passo.");
-          const status = fs.input.value;
+          const status = fs.input.value; const note = fn.input.value.trim();
           Store.update(NS, (s) => {
-            if (isNew) { s.tasks.push({ id: t.id, text, due: fd.input.value || "", status, done: status === "done", doneAt: status === "done" ? Date.now() : null, createdAt: Date.now() }); }
-            else { const it = s.tasks.find((x) => x.id === t.id); it.text = text; it.due = fd.input.value || ""; if (it.status !== status) { it.status = status; it.done = status === "done"; it.doneAt = status === "done" ? Date.now() : null; } }
+            if (isNew) { s.tasks.push({ id: t.id, text, due: fd.input.value || "", status, note, done: status === "done", doneAt: status === "done" ? Date.now() : null, createdAt: Date.now() }); }
+            else { const it = s.tasks.find((x) => x.id === t.id); it.text = text; it.due = fd.input.value || ""; it.note = note; if (it.status !== status) { it.status = status; it.done = status === "done"; it.doneAt = status === "done" ? Date.now() : null; } }
           });
           sh.close();
         })}),
