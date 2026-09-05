@@ -167,14 +167,22 @@
   }
 
   /** Saldo atual por método de pagamento (fonte): saldo inicial + receitas − despesas nessa fonte.
-      Transferências são ignoradas (não há modelo de conta origem/destino). */
+      Uma transferência (type "transfer") move dinheiro entre duas contas próprias sem contar
+      como receita/despesa: sai de "account" e entra em "toAccount". Uma transferência sem
+      "toAccount" (criada antes de existir esse campo) continua sem efeito nos saldos — tal como
+      sempre foi — em vez de mexer só num lado e piorar um saldo que já podia estar calibrado. */
   function sourceBalances(fin) {
     const sources = fin.sources || [];
     const balances = {};
     sources.forEach((s) => { balances[s.name] = s.opening || 0; });
     (fin.transactions || []).forEach((t) => {
-      if (t.type === "transfer") return;
       const acc = t.account || "Outros";
+      if (t.type === "transfer") {
+        if (!t.toAccount || t.toAccount === acc) return;
+        balances[acc] = (balances[acc] || 0) - t.amount;
+        balances[t.toAccount] = (balances[t.toAccount] || 0) + t.amount;
+        return;
+      }
       balances[acc] = (balances[acc] || 0) + (t.type === "income" ? t.amount : -t.amount);
     });
     const known = new Set(sources.map((s) => s.name));

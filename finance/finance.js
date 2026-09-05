@@ -286,20 +286,36 @@
 
     const catRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fCat]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir categorias", onclick: () => manageCategories() })]);
     const srcRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fAcc]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir fontes", onclick: () => manageSources() })]);
+    // Só para transferências: para onde vai o dinheiro. Sem isto o saldo saía da conta de
+    // origem mas não entrava em lado nenhum — era o que fazia os saldos nunca baterem certo.
+    const fToAcc = sourceField(t.toAccount, "Conta destino");
+    const toRow = el("div", { class: "row", style: "gap:8px;align-items:flex-end" }, [el("div", { style: "flex:1" }, [fToAcc]), el("button", { class: "btn btn-soft btn-icon", text: "⚙", title: "Gerir fontes", onclick: () => manageSources() })]);
+    const updateTransferFields = () => {
+      const isTransfer = fType.input.value === "transfer";
+      toRow.style.display = isTransfer ? "" : "none";
+      fAcc.querySelector("span").textContent = isTransfer ? "Conta de origem" : "Fonte de pagamento";
+    };
+    fType.input.addEventListener("change", updateTransferFields);
+    updateTransferFields();
 
     const body = [
-      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, srcRow,
+      fType, el("div", { class: "input-row" }, [fAmount, fDate]), fDesc, catRow, srcRow, toRow,
       el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
         !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { const snap = JSON.parse(JSON.stringify(t)); Store.update(NS, (s) => { s.transactions = s.transactions.filter((x) => x.id !== t.id); }); sh.close(); undo("Transação apagada", () => Store.update(NS, (s) => { s.transactions.push(snap); })); } }) : null,
         el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: () => {
+          const isTransfer = fType.input.value === "transfer";
+          const toAccount = fToAcc.input.value.trim();
+          if (isTransfer && (!toAccount || toAccount === fAcc.input.value.trim())) return toast("Escolhe uma conta destino diferente da origem.");
           const data = { ...t, date: fDate.input.value, desc: fDesc.input.value.trim(), amount: Math.abs(parseFloat(fAmount.input.value) || 0),
-            category: fCat.input.value.trim() || "Outros", type: fType.input.value, account: fAcc.input.value.trim() || "Dinheiro", manual: t.manual !== false };
+            category: fCat.input.value.trim() || "Outros", type: fType.input.value, account: fAcc.input.value.trim() || "Dinheiro",
+            toAccount: isTransfer ? toAccount : null, manual: t.manual !== false };
           if (!data.amount) return toast("Indica um valor.");
           Store.update(NS, (s) => {
             const i = s.transactions.findIndex((x) => x.id === data.id); if (i >= 0) s.transactions[i] = data; else { data._c = Date.now(); s.transactions.push(data); }
-            // auto-regista categoria / fonte novas
+            // auto-regista categoria / fontes novas
             if (data.category && !s.categories.some((c) => c.name === data.category)) s.categories.push({ name: data.category, group: data.type === "income" ? "income" : "lifestyle" });
             if (data.account && !s.sources.some((x) => x.name === data.account)) s.sources.push({ id: uid(), name: data.account });
+            if (data.toAccount && !s.sources.some((x) => x.name === data.toAccount)) s.sources.push({ id: uid(), name: data.toAccount });
           });
           learnRule(data.desc, data.category);
           sh.close(); toast("Guardado ✓");
@@ -331,12 +347,12 @@
 
   /** Campo "Fonte de pagamento" — select com as fontes existentes + opção para criar uma nova.
       Substitui o antigo input+datalist, que não abre nenhuma sugestão em Safari/iOS (bug reportado). */
-  function sourceField(value) {
+  function sourceField(value, label) {
     const names = sourceNames();
     const opts = names.map((n) => ({ value: n, label: n }));
     if (value && !names.includes(value)) opts.unshift({ value, label: value });
     opts.push({ value: "__new__", label: "+ Nova fonte…" });
-    const f = field("Fonte de pagamento", { type: "select", value: value || names[0] || "", options: opts });
+    const f = field(label || "Fonte de pagamento", { type: "select", value: value || names[0] || "", options: opts });
     f.input.addEventListener("change", () => {
       if (f.input.value !== "__new__") return;
       const prev = value || names[0] || "";
