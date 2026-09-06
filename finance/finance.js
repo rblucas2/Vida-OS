@@ -2,7 +2,7 @@
    Finanças Pessoais
    ===================================================================== */
 (function () {
-  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, donutCard, colorFor, uid, todayISO, monthKey, prettyMonth, guardClick } = UI;
+  const { el, $, clear, eur, eur0, num, toast, undo, sheet, field, bar, donut, donutCard, colorsForCount, uid, todayISO, monthKey, prettyMonth, guardClick } = UI;
   const D = Domain;
   const NS = "fin";
 
@@ -124,9 +124,10 @@
     // Donut por categoria — toca numa fatia ou na legenda para ver o valor e a
     // percentagem exatos dessa categoria em vez do total.
     const cats = Object.entries(s.byCat).sort((a, b) => b[1] - a[1]);
+    const catColors = colorsForCount(cats.length);
     const chartCard = donutCard({
       title: "Despesas por categoria",
-      parts: cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) })),
+      parts: cats.map(([name, value], i) => ({ label: name, value, color: catColors[i] })),
       totalValue: eur0(s.expense), totalLabel: "gasto",
       empty: '<span class="ico">🥧</span>Sem despesas neste mês. Adiciona movimentos, importa um CSV, ou muda de mês com ‹ ›.',
     });
@@ -847,9 +848,10 @@
     (fin.transactions || []).forEach((t) => { if (t.type === "expense" && (t.date || "").slice(0, 4) === curYear) byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
     const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
     const totalExp = cats.reduce((a, c) => a + c[1], 0) || 1;
+    const catColors2 = colorsForCount(cats.length);
     const catCard = donutCard({
       title: "Onde gastas mais · " + curYear,
-      parts: cats.map(([name, value]) => ({ label: name, value, color: colorFor(name) })),
+      parts: cats.map(([name, value], i) => ({ label: name, value, color: catColors2[i] })),
       totalValue: eur0(totalExp), totalLabel: "gasto em " + curYear,
       empty: '<span class="ico">🥧</span>Sem despesas este ano ainda.',
     });

@@ -260,12 +260,22 @@
     return wrap;
   }
 
-  // Paleta categórica determinística por nome (série 1-8, ver --series-N em base.css).
-  // Mesma categoria = sempre a mesma cor, mesmo que a ordem das categorias mude.
+  // Paleta categórica (série 1-8, ver --series-N em base.css).
   const PALETTE = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)","var(--series-5)","var(--series-6)","var(--series-7)","var(--series-8)"];
+  // Cor determinística por nome — só para usos isolados (uma cor de cada vez, sem mais
+  // nenhuma à vista para comparar). NÃO usar para colorir uma lista inteira: com só 8 cores,
+  // duas categorias quaisquer têm forte probabilidade de calhar na mesma cor por acaso
+  // (ex.: "Supermercado" e "Outros" no mesmo gráfico) — foi exatamente o bug reportado.
   function colorFor(str) {
     let h = 0; for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
     return PALETTE[h % PALETTE.length];
+  }
+  // Cores para uma lista de N categorias mostradas AO MESMO TEMPO (ex.: fatias de um donut):
+  // atribui por posição, garantindo que nenhuma se repete enquanto N <= 8. A cor de cada
+  // categoria pode mudar de um dia para o outro se a lista/ordem mudar — aceitável, porque
+  // a legenda ao lado de cada fatia já identifica a categoria pelo nome, não pela cor.
+  function colorsForCount(n) {
+    const out = []; for (let i = 0; i < n; i++) out.push(PALETTE[i % PALETTE.length]); return out;
   }
 
   function svgIcon(path, size = 24) {
@@ -304,5 +314,5 @@
   }
 
   global.UI = { el, $, $$, clear, eur, eur0, num, todayISO, isoDate, monthKey, prettyDate, prettyMonth, MONTHS, DAYS, pad,
-    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, donutCard, sparkBars, lineChart, colorFor, svgIcon, uid, dateNav, guardClick };
+    toast, undo, sheet, confirm, field, bar, toneFor, ring, donut, donutCard, sparkBars, lineChart, colorFor, colorsForCount, svgIcon, uid, dateNav, guardClick };
 })(window);
