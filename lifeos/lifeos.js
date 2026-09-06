@@ -252,7 +252,7 @@
     const strip = el("div", { class: "weekstrip" });
     const base = new Date(viewDate + "T00:00:00"); const dow = (base.getDay() + 6) % 7;
     const monday = new Date(base); monday.setDate(base.getDate() - dow);
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 14; i++) {
       const d = new Date(monday); d.setDate(monday.getDate() + i); const iso = isoDate(d);
       strip.appendChild(el("div", { class: "d" + (iso === viewDate ? " sel" : ""), onclick: () => { viewDate = iso; render("hoje"); } }, [
         el("div", { class: "wn", text: UI.DAYS[d.getDay()] }),
