@@ -354,6 +354,9 @@
     }
     function pick(food) {
       selected = food; search.input.value = food.nome;
+      // Produto vindo do scanner com o tamanho real da embalagem conhecido (ex: 280g) —
+      // pré-preenche a Quantidade com isso em vez de ficar sempre no valor por omissão (100g).
+      if (food.servingGrams) gramsF.input.value = food.servingGrams;
       clear(results); calcPreview();
     }
     function renderResults() {
@@ -903,6 +906,28 @@
   // usa-se getUserMedia + BarcodeDetector diretamente, sem depender de rede nenhuma para o
   // scanner em si. A biblioteca externa html5-qrcode fica só como alternativa para browsers sem
   // BarcodeDetector nativo (ex: Safari/iOS).
+  // Converte o campo "quantity" da Open Food Facts (texto livre: "280 g", "1 L", "1kg",
+  // "6x25g", "6 x 25g") no peso total da embalagem em gramas (ml tratado como g, aproximação
+  // padrão para líquidos). Devolve null se não conseguir interpretar — nesse caso a Quantidade
+  // fica no valor manual/anterior, tal como antes desta correção.
+  function parseQuantityGrams(qty) {
+    if (!qty) return null;
+    const s = String(qty).toLowerCase().replace(",", ".");
+    const multi = s.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*(kg|g|l|ml)\b/);
+    if (multi) {
+      const count = parseFloat(multi[1]), unitVal = parseFloat(multi[2]), unit = multi[3];
+      const grams = (unit === "kg" || unit === "l") ? unitVal * 1000 : unitVal;
+      const total = Math.round(count * grams);
+      return total > 0 ? total : null;
+    }
+    const single = s.match(/(\d+(?:\.\d+)?)\s*(kg|g|l|ml)\b/);
+    if (single) {
+      const val = parseFloat(single[1]), unit = single[2];
+      const total = Math.round((unit === "kg" || unit === "l") ? val * 1000 : val);
+      return total > 0 ? total : null;
+    }
+    return null;
+  }
   function openScanner(onFood) {
     const status = el("div", { class: "tiny muted center", text: "A iniciar câmara…" });
     // altura mínima garantida (aspect-ratio como reforço) — sem isto, o vídeo interno
@@ -936,10 +961,20 @@
         if (j.status !== 1) { status.textContent = `Código ${code} lido, mas o produto não está na base de dados Open Food Facts. Insere-o manualmente abaixo.`; return; }
         const p = j.product, n = p.nutriments || {};
         const sodio = n["sodium_100g"] != null ? Math.round(n["sodium_100g"] * 1000) : (n["salt_100g"] != null ? Math.round(n["salt_100g"] * 400) : 0);
+        // "serving_size" da Open Food Facts é a dose recomendada (ex: "30 g"); "quantity" é o
+        // peso da embalagem inteira (ex: "280 g" de um iogurte, mas também "1 kg" de arroz).
+        // Preferimos "serving_size" por ser sempre uma dose; só usamos "quantity" como reserva
+        // e com limite (600g) para não assumir que uma embalagem a granel (arroz, farinha,
+        // massa) inteira é "uma dose" — isso criaria um erro pior do que o que estamos a corrigir.
+        const servingGrams = parseQuantityGrams(p.serving_size) || (() => {
+          const q = parseQuantityGrams(p.quantity);
+          return (q && q <= 600) ? q : null;
+        })();
         const food = { id: "of_" + code, nome: p.product_name || ("Produto " + code), categoria: p.categories_tags ? "Scanner" : "Outros",
           calorias: Math.round(n["energy-kcal_100g"] || (n["energy_100g"] ? n["energy_100g"] / 4.184 : 0)),
           proteina: +(n["proteins_100g"] || 0), hidratos: +(n["carbohydrates_100g"] || 0), gordura: +(n["fat_100g"] || 0),
-          fibra: +(n["fiber_100g"] || 0), acucar: +(n["sugars_100g"] || 0), saturadas: +(n["saturated-fat_100g"] || 0), sodio };
+          fibra: +(n["fiber_100g"] || 0), acucar: +(n["sugars_100g"] || 0), saturadas: +(n["saturated-fat_100g"] || 0), sodio,
+          ...(servingGrams ? { servingGrams } : {}) };
         // guardar na base local
         Store.update(NS, (st) => { if (!st.foods.some((f) => f.id === food.id)) st.foods.unshift(food); });
         stopAll();
