@@ -87,8 +87,8 @@
     ]);
 
     const kpis = el("div", { class: "grid-2" }, [
-      kpiCard("Rendimentos", eur(s.income), "var(--good)", "↑"),
-      kpiCard("Despesas", eur(s.expense), "var(--bad)", "↓"),
+      kpiCard("Rendimentos", eur(s.income), "var(--good)", "↑", () => showTxSheet("Rendimentos · " + UI.prettyMonth(viewMonth), D.txInMonth(fin.transactions, viewMonth).filter((t) => t.type === "income"))),
+      kpiCard("Despesas", eur(s.expense), "var(--bad)", "↓", () => showTxSheet("Despesas · " + UI.prettyMonth(viewMonth), D.txInMonth(fin.transactions, viewMonth).filter((t) => t.type === "expense"))),
     ]);
 
     const balCard = sourceBalancesCard();
@@ -130,6 +130,7 @@
       parts: cats.map(([name, value], i) => ({ label: name, value, color: catColors[i] })),
       totalValue: eur0(s.expense), totalLabel: "gasto",
       empty: '<span class="ico">🥧</span>Sem despesas neste mês. Adiciona movimentos, importa um CSV, ou muda de mês com ‹ ›.',
+      onOpen: (p) => showTxSheet(p.label + " · " + UI.prettyMonth(viewMonth), D.txInMonth(fin.transactions, viewMonth).filter((t) => t.type === "expense" && (t.category || "Outros") === p.label)),
     });
 
     // Top despesas
@@ -154,8 +155,23 @@
     view.appendChild(el("div", { class: "stack" }, [hero, kpis, balCard, chartCard, splitCard, trendCard, cumCard, topCard].filter(Boolean)));
   }
 
-  function kpiCard(k, v, color, arrow) { return el("div", { class: "card kpi pad-sm" }, [el("div", { class: "k", text: k }), el("div", { class: "v num", style: "color:" + color, text: (arrow ? arrow + " " : "") + v })]); }
+  function kpiCard(k, v, color, arrow, onclick) { return el("div", { class: "card kpi pad-sm", style: onclick ? "cursor:pointer" : "", onclick: onclick || null }, [el("div", { class: "k", text: k }), el("div", { class: "v num", style: "color:" + color, text: (arrow ? arrow + " " : "") + v })]); }
   function barColored(pct, color) { const b = bar(Math.min(100, pct)); b.firstChild.style.background = color; b.style.marginTop = "6px"; return b; }
+
+  /** Abre uma sheet com a lista de transações dadas (mais recente primeiro) — usado
+   *  pelos widgets Rendimentos/Despesas e pelos gráficos circulares para mostrar os
+   *  movimentos concretos por trás de um valor/categoria. */
+  function showTxSheet(title, txs) {
+    const sorted = [...txs].sort((a, b) => (b.date || "").localeCompare(a.date) || (b._c || 0) - (a._c || 0));
+    const total = sorted.reduce((a, t) => a + t.amount, 0);
+    const list = el("div", { class: "list" });
+    if (!sorted.length) list.appendChild(el("div", { class: "empty tiny", text: "Sem movimentos." }));
+    else sorted.forEach((t) => list.appendChild(txRow(t, true)));
+    sheet(title, [
+      el("p", { class: "tiny muted", text: sorted.length + " movimento" + (sorted.length === 1 ? "" : "s") + " · total " + eur(total) }),
+      list,
+    ]);
+  }
 
   /** Card "Saldo por método de pagamento" — quanto dinheiro há em cada fonte (dinheiro, cartões, contas…). */
   function sourceBalancesCard() {
@@ -854,6 +870,7 @@
       parts: cats.map(([name, value], i) => ({ label: name, value, color: catColors2[i] })),
       totalValue: eur0(totalExp), totalLabel: "gasto em " + curYear,
       empty: '<span class="ico">🥧</span>Sem despesas este ano ainda.',
+      onOpen: (p) => showTxSheet(p.label + " · " + curYear, (fin.transactions || []).filter((t) => t.type === "expense" && (t.date || "").slice(0, 4) === curYear && (t.category || "Outros") === p.label)),
     });
 
     view.appendChild(el("div", { class: "stack" }, [hero, chart, catCard, yearsCard].filter(Boolean)));

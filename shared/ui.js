@@ -175,8 +175,10 @@
   /** Donut + legenda + total central, com interatividade: tocar numa fatia (ou na
    *  linha da legenda correspondente) mostra o nome/valor/percentagem dessa fatia no
    *  centro do anel e esbate as restantes; tocar de novo volta ao total. Usado nos
-   *  gráficos de categorias das Finanças. */
-  function donutCard({ title, parts, totalValue, totalLabel, legendLimit = 7, empty } = {}) {
+   *  gráficos de categorias das Finanças. Com onOpen(part) definido, o detalhe da
+   *  fatia ganha um link "Ver movimentos" que chama onOpen — quem chama decide o que
+   *  mostrar (ex.: a lista de transações dessa categoria). */
+  function donutCard({ title, parts, totalValue, totalLabel, legendLimit = 7, empty, onOpen } = {}) {
     const total = parts.reduce((a, p) => a + p.value, 0) || 1;
     if (!parts.length) return el("div", { class: "card" }, [title ? el("strong", { text: title }) : null, el("div", { class: "empty tiny", html: empty || "—" })].filter(Boolean));
 
@@ -192,6 +194,7 @@
       centerEl.appendChild(el("div", { class: "tiny", style: "font-weight:750;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: p.label }));
       centerEl.appendChild(fitText(eur0(p.value)));
       centerEl.appendChild(el("div", { class: "tiny muted", style: "font-size:.62rem", text: Math.round(p.value / total * 100) + "%" }));
+      if (onOpen) centerEl.appendChild(el("div", { class: "tiny", style: "font-size:.6rem;font-weight:750;color:var(--accent);margin-top:2px;cursor:pointer", text: "Ver movimentos ›", onclick: (e) => { e.stopPropagation(); onOpen(p); } }));
     }
     let selectedIdx = null;
     const legendRows = [];
