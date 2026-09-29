@@ -18,14 +18,13 @@
 
   function init() {
     App.boot({ active: "tese" });
-    Store.ensure(NS, { targetDate: "", milestones: [], tasks: [] });
+    Store.ensure(NS, { targetDate: "", milestones: [], tasks: [], works: [] });
     migrateFromLifeos();
     normalizeData();
     App.onboard("tese", "Tese", [
-      "🎓 Define a <b>data prevista de apresentação</b> e acompanha a contagem decrescente no Resumo.",
-      "🧭 <b>Linha do tempo</b>: vê os marcos e passos espalhados entre hoje e a apresentação.",
-      "📅 <b>Calendário</b>: o que está agendado para cada dia.",
-      "🗂️ <b>Quadro</b>: arrasta os passos entre Por fazer / Em curso / Feito.",
+      "🎓 <b>Resumo / Semana / Calendário / Quadro</b> — o teu <b>Projeto</b> de tese: define a data prevista de apresentação e acompanha marcos e passos.",
+      "📚 <b>Trabalhos</b> — separado do Projeto: os trabalhos e entregas das cadeiras do mestrado, organizados por cadeira.",
+      "📅 Em qualquer vista podes <b>Importar do Google Calendar</b> (Resumo) para trazer o planeamento que já tens lá.",
     ]);
     $("#settingsBtn").addEventListener("click", App.openSettings);
     const tabs = $("#tabs");
@@ -57,7 +56,8 @@
   // adicionado) — itens antigos só tinham "done" (booleano). Idempotente.
   function normalizeData() {
     Store.update(NS, (s) => {
-      [s.milestones, s.tasks].forEach((arr) => (arr || []).forEach((it) => {
+      if (!s.works) s.works = [];
+      [s.milestones, s.tasks, s.works].forEach((arr) => (arr || []).forEach((it) => {
         if (!it.status) it.status = it.done ? "done" : "todo";
         if (it.status === "done" && !it.doneAt) it.doneAt = Date.now();
         it.done = it.status === "done";
@@ -83,7 +83,7 @@
   function render(tab) {
     current = tab;
     const view = clear($("#view"));
-    ({ resumo: renderResumo, timeline: renderTimeline, calendar: renderCalendar, board: renderBoard }[tab] || renderResumo)(view);
+    ({ resumo: renderResumo, timeline: renderTimeline, calendar: renderCalendar, board: renderBoard, works: renderWorks }[tab] || renderResumo)(view);
   }
 
   /* ----------------------------- RESUMO ----------------------------- */
@@ -457,6 +457,100 @@
     });
 
     view.appendChild(el("div", { class: "stack" }, [board]));
+  }
+
+  /* ----------------------------- TRABALHOS (cadeiras do mestrado) -----------------------------
+     Separado do Projeto (tese): entregas das cadeiras/UCs do mestrado, agrupadas por cadeira —
+     equivalente à antiga página "Trabalhos de Mestrado" do Notion, distinta da página "Projeto". */
+  function renderWorks(view) {
+    const th = Store.get(NS);
+    $("#subtitle").textContent = "Trabalhos das cadeiras — separado do Projeto da tese";
+    const works = th.works || [];
+
+    const totalCount = works.length;
+    const doneCount = works.filter((w) => w.status === "done").length;
+    const openCount = totalCount - doneCount;
+    const statsRow = el("div", { class: "row", style: "gap:10px" }, [
+      statCard(totalCount + "", "trabalhos"),
+      statCard(openCount + "", "por entregar"),
+      statCard(doneCount + "", "entregues"),
+    ]);
+
+    const addBtn = el("button", { class: "btn btn-soft btn-block btn-sm", text: "+ Trabalho", onclick: () => editWork(null) });
+
+    if (!works.length) {
+      view.appendChild(el("div", { class: "stack" }, [
+        statsRow,
+        el("div", { class: "card empty", text: "Sem trabalhos ainda. Adiciona os trabalhos e entregas das tuas cadeiras — cada um com a sua cadeira, data de entrega e estado." }),
+        addBtn,
+      ]));
+      return;
+    }
+
+    const bySubject = {};
+    works.forEach((w) => { const key = (w.subject || "").trim() || "Sem cadeira"; (bySubject[key] = bySubject[key] || []).push(w); });
+    const subjects = Object.keys(bySubject).sort((a, b) => a === "Sem cadeira" ? 1 : b === "Sem cadeira" ? -1 : a.localeCompare(b, "pt"));
+
+    const groupCards = subjects.map((subject) => {
+      const items = bySubject[subject].slice().sort((a, b) => (a.status === "done") - (b.status === "done") || (a.due || "9999").localeCompare(b.due || "9999"));
+      const doneN = items.filter((w) => w.status === "done").length;
+      const list = el("div", { class: "list", style: "margin-top:6px" });
+      items.forEach((w) => list.appendChild(workRow(w)));
+      return el("div", { class: "card" }, [
+        el("div", { class: "row between" }, [
+          el("strong", { text: subject }),
+          el("span", { class: "tiny muted num", text: doneN + "/" + items.length }),
+        ]),
+        list,
+      ]);
+    });
+
+    view.appendChild(el("div", { class: "stack" }, [statsRow, ...groupCards, addBtn]));
+  }
+  function workRow(w) {
+    const isDone = w.status === "done";
+    const metaBits = [w.due ? UI.prettyDate(w.due) : null, w.grade ? "Nota: " + w.grade : null, w.note || null].filter(Boolean);
+    return el("div", { class: "item", style: "padding:8px 2px" }, [
+      el("button", { class: "btn btn-icon btn-ghost", style: "width:24px;height:24px;border:2px solid " + (isDone ? "var(--good)" : "var(--border)") + ";background:" + (isDone ? "var(--good)" : "transparent") + ";color:#fff;font-size:.7rem;flex:none", html: isDone ? "✓" : "", onclick: () => toggleWorkDone(w.id) }),
+      el("div", { class: "grow", style: "cursor:pointer;" + (isDone ? "text-decoration:line-through;color:var(--text-mute)" : ""), onclick: () => editWork(w) }, [
+        el("div", { class: "t", text: w.text }),
+        metaBits.length ? el("div", { class: "s tiny muted", text: metaBits.join(" · ") }) : null,
+      ]),
+      !isDone ? el("span", { class: "pill tiny", style: "color:" + statusColor(w.status) + ";border-color:" + statusColor(w.status), text: statusLabel(w.status) }) : null,
+    ]);
+  }
+  function toggleWorkDone(id) {
+    Store.update(NS, (s) => {
+      const w = s.works.find((x) => x.id === id); if (!w) return;
+      const next = w.status === "done" ? "todo" : "done";
+      w.status = next; w.done = next === "done"; w.doneAt = next === "done" ? Date.now() : null;
+    });
+  }
+  function editWork(existing) {
+    const isNew = !existing;
+    const w = existing || { id: uid(), subject: "", text: "", due: "", status: "todo", grade: "", note: "" };
+    const fSubj = field("Cadeira / UC", { value: w.subject, placeholder: "ex: Metodologias de Investigação" });
+    const f = field("Trabalho", { value: w.text, placeholder: "ex: Trabalho de grupo 1, Relatório final…" });
+    const fd = field("Data de entrega (opcional)", { type: "date", value: w.due || "" });
+    const fs = field("Estado", { type: "select", value: w.status, options: STATUSES.map((s) => ({ value: s.id, label: s.label })) });
+    const fg = field("Nota (opcional)", { value: w.grade || "", placeholder: "ex: 17" });
+    const fn = field("Notas (opcional)", { type: "textarea", value: w.note || "", placeholder: "ex: entregar em PDF, grupo com o João…" });
+    const sh = sheet(isNew ? "Novo trabalho" : "Editar trabalho", [
+      fSubj, f, fd, fs, fg, fn,
+      el("div", { class: "row", style: "gap:10px;margin-top:8px" }, [
+        !isNew ? el("button", { class: "btn btn-block", style: "color:var(--bad)", text: "Apagar", onclick: () => { Store.update(NS, (s) => { s.works = s.works.filter((x) => x.id !== w.id); }); sh.close(); } }) : null,
+        el("button", { class: "btn btn-primary btn-block", text: "Guardar", onclick: guardClick(() => {
+          const text = f.input.value.trim(); if (!text) return toast("Indica o trabalho.");
+          const subject = fSubj.input.value.trim(); const status = fs.input.value; const grade = fg.input.value.trim(); const note = fn.input.value.trim();
+          Store.update(NS, (s) => {
+            if (isNew) { s.works.push({ id: w.id, subject, text, due: fd.input.value || "", status, grade, note, done: status === "done", doneAt: status === "done" ? Date.now() : null, createdAt: Date.now() }); }
+            else { const it = s.works.find((x) => x.id === w.id); it.subject = subject; it.text = text; it.due = fd.input.value || ""; it.grade = grade; it.note = note; if (it.status !== status) { it.status = status; it.done = status === "done"; it.doneAt = status === "done" ? Date.now() : null; } }
+          });
+          sh.close();
+        })}),
+      ]),
+    ]);
+    setTimeout(() => fSubj.input.focus(), 50);
   }
 
   /* ----------------------------- FORMULÁRIOS (marcos e passos) ----------------------------- */
