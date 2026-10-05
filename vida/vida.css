@@ -1,0 +1,40 @@
+/* Vida — identidade (violeta) por cima do design system partilhado */
+:root {
+  --bg: #13121a; --bg-glow: #221d36; --surface: #1b1a25; --surface-2: #23222f; --surface-3: #2e2c3d; --field: #15141d;
+  --border: #2a2938; --border-2: #383649; --text: #efedf6; --text-soft: #aba8bd; --text-mute: #75728a;
+  --accent: #9d8df5; --accent-ink: #bdb2fa; --accent-soft: #2b2745; --on-accent: #17122e;
+  --good: #5bbd8a; --bar-pos: #8676e6; --bar-neg: #b5694f;
+}
+:root[data-theme="light"] {
+  --bg: #f4f3f8; --bg-glow: #e8e4fb; --surface: #ffffff; --surface-2: #f1eff8; --surface-3: #e4e1f0; --field: #f8f7fc;
+  --border: #e3e0ee; --border-2: #d2cee3; --text: #1a1726; --text-soft: #5f5b72; --text-mute: #8e8aa3;
+  --accent: #6d5ce6; --accent-ink: #5442c9; --accent-soft: #ebe8fd; --on-accent: #ffffff; --bar-pos: #8676e6;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg: #f4f3f8; --bg-glow: #e8e4fb; --surface: #ffffff; --surface-2: #f1eff8; --surface-3: #e4e1f0; --field: #f8f7fc;
+    --border: #e3e0ee; --border-2: #d2cee3; --text: #1a1726; --text-soft: #5f5b72; --text-mute: #8e8aa3;
+    --accent: #6d5ce6; --accent-ink: #5442c9; --accent-soft: #ebe8fd; --on-accent: #ffffff; --bar-pos: #8676e6;
+  }
+}
+
+/* Hábitos: linha com os últimos 7 dias */
+.habit-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.habit-row > .task { flex: 1 1 260px; min-width: 0; }
+.dots7 { display: flex; gap: 6px; }
+.dot7 { width: 34px; height: 34px; border-radius: 50%; padding: 0; gap: 0; border: 1px solid var(--border-2); background: var(--field); color: var(--text-mute); font-size: .7rem; font-weight: 700; }
+.dot7.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.dot7.today { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent); }
+@media (max-width: 560px) { .dot7 { width: 30px; height: 30px; } .dots7 { gap: 4px; } }
+
+/* Objetivos */
+.goal-line { display: flex; align-items: flex-start; gap: 14px; }
+.goal-line > .chk { margin-top: 2px; }
+
+/* Destaques */
+.panel.is-today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.panel.is-past { opacity: .7; }
+details.rev { border-bottom: 1px solid var(--border); padding: 10px 0; }
+details.rev:last-child { border-bottom: 0; }
+details.rev summary { cursor: pointer; font-weight: 650; }
+.weekstrip { margin-bottom: 4px; }

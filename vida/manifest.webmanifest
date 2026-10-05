@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "Vida",
+  "short_name": "Vida",
+  "description": "O teu dia, hábitos, objetivos, diário, agenda e tese — privado e sincronizado.",
+  "lang": "pt-PT",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#13121a",
+  "theme_color": "#13121a",
+  "categories": ["lifestyle", "productivity"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
